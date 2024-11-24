@@ -5,3 +5,4 @@ target
 pkg
 .idea
 .vscode
+**/admin.prikey
