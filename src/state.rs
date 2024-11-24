@@ -1,16 +1,19 @@
-use crate::config::{default_entities, default_local, get_modifier};
-use crate::events::restart_object_modifier;
-use crate::events::EventQueue;
-use crate::settlement::SettlementInfo;
-use crate::StorageData;
-use crate::MERKLE_MAP;
-use serde::{Serialize, Serializer, ser::SerializeSeq};
-use zkwasm_rest_abi::WithdrawInfo;
-use zkwasm_rust_sdk::require;
+use crate::config::ADMIN_PUBKEY;
+use crate::config::CONFIG;
+use crate::error::*;
+use crate::events::Event;
+use crate::object::Object;
+use crate::player::AutomataPlayer;
+use crate::player::Owner;
 use std::cell::RefCell;
-use crate::Player;
-use core::slice::IterMut;
+use zkwasm_rest_abi::StorageData;
+use zkwasm_rest_abi::WithdrawInfo;
+use zkwasm_rest_abi::MERKLE_MAP;
+use zkwasm_rest_convention::EventQueue;
+use zkwasm_rest_convention::SettlementInfo;
+use zkwasm_rust_sdk::require;
 
+/*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -22,295 +25,7 @@ fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S
         }
         seq.end()
     }
-
-// Custom serializer for `u64` as a string.
-fn serialize_u64_as_string<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&value.to_string())
-    }
-
-#[derive(Clone, Debug, Serialize)]
-pub struct Attributes(pub Vec<i64>);
-
-impl Attributes {
-    pub fn apply_modifier(&mut self, m: &Attributes) -> bool {
-        for (a, b) in self.0.iter().zip(m.0.iter()) {
-            if *a + *b < 0 {
-                return false;
-            }
-        }
-        for (a, b) in self.0.iter_mut().zip(m.0.iter()) {
-            *a += *b;
-        }
-        return true;
-    }
-}
-
-impl Attributes {
-    fn default_entities() -> Self {
-        Attributes(default_entities().to_vec())
-    }
-    fn default_local() -> Self {
-        Attributes(default_local().to_vec())
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct Object {
-    #[serde(serialize_with="serialize_u64_array_as_string")]
-    pub object_id: [u64; 4],
-    #[serde(serialize_with="serialize_u64_as_string")]
-    pub modifier_info: u64, // running << 56 + (modifier index << 48) + counter
-    pub modifiers: Vec<u64>,
-    pub entity: Attributes,
-}
-
-#[derive(Clone)]
-pub struct Modifier {
-    pub entity: Attributes,
-    pub local: Attributes,
-    pub global: Attributes,
-}
-
-impl Modifier {
-    pub fn default() -> Self {
-        Modifier {
-            entity: Attributes::default_entities(),
-            local: Attributes::default_local(),
-            global: Attributes(vec![]),
-        }
-    }
-}
-
-impl Object {
-    pub fn new(object_id: &[u64; 4], modifiers: Vec<u64>) -> Self {
-        Self {
-            object_id: object_id.clone(),
-            modifier_info: 0,
-            modifiers,
-            entity: Attributes::default_entities(),
-        }
-    }
-    pub fn halt(&mut self) {
-        self.modifier_info = (self.modifier_info & 0xFFFFFFFFFFFFFF) | 1 << 56;
-    }
-
-    pub fn is_halted(&mut self) -> bool {
-        (self.modifier_info >> 56) == 1
-    }
-
-    pub fn get_modifier_index(&self) -> u64 {
-        return (self.modifier_info >> 48) & 0x7f;
-    }
-
-    pub fn start_new_modifier(&mut self, modifier_index: usize, counter: u64) {
-        self.modifier_info = ((modifier_index as u64) << 48) | counter;
-    }
-
-    pub fn restart(&mut self, counter: u64) {
-        self.modifier_info = (0u64 << 48) + counter;
-    }
-
-    pub fn store(&self) {
-        let oid = self.object_id;
-        zkwasm_rust_sdk::dbg!("store object {:?}\n", oid);
-        let mut data = Vec::with_capacity(3 + self.entity.0.len() + self.modifiers.len() + 2);
-        data.push(self.modifier_info);
-        data.push(self.modifiers.len() as u64);
-        for c in self.modifiers.iter() {
-            data.push(*c as u64);
-        }
-        data.push(self.entity.0.len() as u64);
-        for c in self.entity.0.iter() {
-            data.push(*c as u64);
-        }
-
-        let kvpair = unsafe { &mut MERKLE_MAP };
-        kvpair.set(&self.object_id, data.as_slice());
-        zkwasm_rust_sdk::dbg!("end store object\n");
-    }
-    pub fn apply_modifier(&mut self, m: &Modifier) -> bool {
-        self.entity.apply_modifier(&m.entity)
-    }
-
-    pub fn get(object_id: &[u64; 4]) -> Option<Self> {
-        let kvpair = unsafe { &mut MERKLE_MAP };
-        //zkwasm_rust_sdk::dbg!("get object with oid {:?}\n", object_id);
-        let data = kvpair.get(&object_id);
-        //zkwasm_rust_sdk::dbg!("get object with {:?}\n", data);
-        if data.is_empty() {
-            None
-        } else {
-            let modifier_info = data[0].clone();
-            let entity_size = data[1].clone();
-            let (_, rest) = data.split_at(2);
-            let (modifiers, entity) = rest.split_at(entity_size as usize);
-            let entity = entity
-                .into_iter()
-                .skip(1)
-                .map(|x| *x as i64)
-                .collect::<Vec<_>>();
-            let p = Object {
-                object_id: object_id.clone(),
-                modifier_info,
-                modifiers: modifiers.to_vec(),
-                entity: Attributes(entity),
-            };
-            Some(p)
-        }
-    }
-
-    pub fn reset_modifier(&mut self, modifiers: Vec<u64>) {
-        self.modifiers = modifiers;
-    }
-
-    pub fn reset_halt_bit_to_restart(&mut self) {
-        self.modifier_info = (self.modifier_info & 0xFFFFFFFFFFFFFF) | 1 << 57;
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct PlayerData {
-    pub objects: Vec<u64>,
-    pub local: Attributes,
-}
-
-impl Default for PlayerData {
-    fn default() -> Self {
-        Self {
-            objects: vec![],
-            local: Attributes::default_local(),
-        }
-    }
-}
-
-impl StorageData for PlayerData {
-    fn from_data(u64data: &mut IterMut<u64>) -> Self {
-        let objects_size = *u64data.next().unwrap();
-        let mut objects = Vec::with_capacity(objects_size as usize);
-        for _ in 0..objects_size {
-            objects.push(*u64data.next().unwrap());
-        }
-        let local = u64data
-            .into_iter()
-            .skip(1)
-            .map(|x| *x as i64)
-            .collect::<Vec<_>>();
-        PlayerData {
-            objects,
-            local: Attributes(local),
-        }
-    }
-    fn to_data(&self, data: &mut Vec<u64>) {
-        data.push(self.objects.len() as u64);
-        for c in self.objects.iter() {
-            data.push(*c as u64);
-        }
-        data.push(self.local.0.len() as u64);
-        for c in self.local.0.iter() {
-            data.push(*c as u64);
-        }
-    }
-}
-
-pub type AutomataPlayer = Player<PlayerData>;
-
-pub trait Owner: Sized {
-    fn obj_id_from_pid(pid: &[u64; 2], index: usize) -> [u64; 4];
-    fn generate_obj_id(pkey: &[u64; 4], index: usize) -> [u64; 4];
-    fn get_obj_id(&self, index: usize) -> [u64; 4];
-    fn store(&self);
-    fn new(pkey: &[u64; 4]) -> Self;
-    fn apply_modifier(&mut self, m: &Modifier) -> bool;
-    fn get(pkey: &[u64; 4]) -> Option<Self>;
-}
-
-impl Owner for AutomataPlayer {
-    fn obj_id_from_pid(pid: &[u64; 2], index: usize) -> [u64; 4] {
-        let key = (1 << 32) | ((index as u64) << 16) | (pid[0] & 0xffff00000000ffff);
-        return [key, pid[1], pid[0], 0xff03];
-    }
-    fn generate_obj_id(pkey: &[u64; 4], index: usize) -> [u64; 4] {
-        // zkwasm_rust_sdk::dbg!("\n ----> generate obj id\n");
-        Player::obj_id_from_pid(&Self::pkey_to_pid(pkey), index)
-    }
-    fn store(&self) {
-        zkwasm_rust_sdk::dbg!("store player\n");
-        let mut data = Vec::new();
-        self.data.to_data(&mut data);
-        let kvpair = unsafe { &mut MERKLE_MAP };
-        kvpair.set(&Self::to_key(&self.player_id), data.as_slice());
-        zkwasm_rust_sdk::dbg!("end store player\n");
-    }
-    fn new(pkey: &[u64; 4]) -> Self {
-        Self::new_from_pid(Self::pkey_to_pid(pkey))
-    }
-
-    fn get_obj_id(&self, index: usize) -> [u64; 4] {
-        // zkwasm_rust_sdk::dbg!("\n ----> get obj with id: {}\n", index);
-        Player::obj_id_from_pid(&self.player_id, index)
-    }
-
-    fn apply_modifier(&mut self, m: &Modifier) -> bool {
-        self.data.local.apply_modifier(&m.local)
-    }
-
-    fn get(pkey: &[u64; 4]) -> Option<Self> {
-        Self::get_from_pid(&Self::pkey_to_pid(pkey))
-    }
-}
-
-pub struct State {}
-
-impl State {
-    pub fn snapshot() -> String {
-        "{}".to_string()
-    }
-    pub fn get_state(pid: Vec<u64>) -> String {
-        let player = AutomataPlayer::get(&pid.try_into().unwrap()).unwrap();
-        let mut objs = vec![];
-        for (index, _) in player.data.objects.iter().enumerate() {
-            let oid = player.get_obj_id(index);
-            let obj = Object::get(&oid).unwrap();
-            objs.push(obj);
-        }
-        let counter = QUEUE.0.borrow().counter;
-        serde_json::to_string(&(player, objs, counter)).unwrap()
-    }
-
-    pub fn preempt() -> bool {
-        let counter = QUEUE.0.borrow().counter;
-        if counter % 5 == 0 {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn flush_settlement() -> Vec<u8> {
-        SettlementInfo::flush_settlement()
-    }
-
-    pub fn rand_seed() -> u64 {
-        0
-    }
-
-    pub fn store() {
-        QUEUE.0.borrow_mut().store();
-    }
-    pub fn initialize() {
-        QUEUE.0.borrow_mut().fetch();
-    }
-}
-
-pub struct SafeEventQueue(RefCell<EventQueue>);
-unsafe impl Sync for SafeEventQueue {}
-
-lazy_static::lazy_static! {
-    pub static ref QUEUE: SafeEventQueue = SafeEventQueue (RefCell::new(EventQueue::new()));
-}
+*/
 
 pub struct Transaction {
     pub command: u64,
@@ -322,18 +37,21 @@ pub struct Transaction {
 const INSTALL_PLAYER: u64 = 1;
 const INSTALL_OBJECT: u64 = 2;
 const RESTART_OBJECT: u64 = 3;
-const WITHDRAW: u64 = 4;
-const DEPOSIT: u64 = 5;
-
-const ERROR_PLAYER_ALREADY_EXIST:u32 = 1;
-const ERROR_PLAYER_NOT_EXIST:u32 = 2;
+const UPGRADE_OBJECT: u64 = 4;
+const INSTALL_CARD: u64 = 5;
+const WITHDRAW: u64 = 6;
+const DEPOSIT: u64 = 7;
+const BOUNTY: u64 = 8;
 
 impl Transaction {
     pub fn decode_error(e: u32) -> &'static str {
         match e {
-           ERROR_PLAYER_NOT_EXIST => "PlayerNotExist",
-           ERROR_PLAYER_ALREADY_EXIST => "PlayerAlreadyExist",
-           _ => "Unknown"
+            ERROR_PLAYER_NOT_EXIST => "PlayerNotExist",
+            ERROR_PLAYER_ALREADY_EXIST => "PlayerAlreadyExist",
+            ERROR_NOT_ENOUGH_BALANCE => "NotEnoughBalance",
+            ERROR_INDEX_OUT_OF_BOUND => "IndexOutofBound",
+            ERROR_NOT_ENOUGH_RESOURCE => "NotEnoughResource",
+            _ => "Unknown",
         }
     }
     pub fn decode(params: [u64; 4]) -> Self {
@@ -349,7 +67,12 @@ impl Transaction {
             }
         } else if command == DEPOSIT {
             data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], amount
+        } else if command == UPGRADE_OBJECT {
+            data = vec![params[1]] // pkey[0], pkey[1], amount
+        } else if command == BOUNTY {
+            data = vec![params[1]] // pkey[0], pkey[1], amount
         };
+
         Transaction {
             command,
             objindex,
@@ -357,130 +80,264 @@ impl Transaction {
             data,
         }
     }
-    pub fn install_player(&self, pkey: &[u64; 4]) -> u32 {
-        let player = AutomataPlayer::get(pkey);
+    pub fn install_player(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let player = AutomataPlayer::get_from_pid(pid);
         match player {
-            Some(_) => ERROR_PLAYER_ALREADY_EXIST,
+            Some(_) => Err(ERROR_PLAYER_ALREADY_EXIST),
             None => {
-                let player = Player::new(&pkey);
+                let player = AutomataPlayer::new_from_pid(*pid);
                 player.store();
-                0
+                Ok(())
             }
         }
     }
-    pub fn install_object(&self, pkey: &[u64; 4]) -> u32 {
-        let mut player = AutomataPlayer::get(pkey);
+    pub fn install_object(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = AutomataPlayer::get_from_pid(pid);
         match player.as_mut() {
-            None => ERROR_PLAYER_NOT_EXIST,
+            None => Err(ERROR_PLAYER_NOT_EXIST),
             Some(player) => {
                 player.check_and_inc_nonce(self.nonce);
                 let objindex = player.data.objects.len();
-                player.data.objects.push(0);
-                let mid = self.data[0];
-                let oid = player.get_obj_id(objindex);
-                let (delay, _) = get_modifier(mid);
-                let mut object = Object::new(&oid, self.data.clone());
-                object.start_new_modifier(0, QUEUE.0.borrow().counter);
-                object.store();
+                unsafe { require(objindex == self.objindex) };
+                player.data.pay_cost()?;
+                let cards = self.data.iter().map(|x| *x as u8).collect::<Vec<_>>();
+                let mut object = Object::new(cards.try_into().unwrap());
+                let counter = STATE.0.borrow().queue.counter;
+                object.start_new_modifier(0, counter);
+                let delay = player.data.cards[object.cards[0] as usize].duration;
+                player.data.objects.push(object);
                 player.store();
-                QUEUE.0.borrow_mut().insert(self.objindex, pkey, delay, 0);
-                0 // no error occurred
+                STATE.0.borrow_mut().queue.insert(Event {
+                    object_index: self.objindex,
+                    owner: *pid,
+                    delta: delay as usize,
+                });
+                Ok(()) // no error occurred
             }
         }
     }
 
-    pub fn restart_object(&self, pkey: &[u64; 4]) -> u32 {
-        let mut player = AutomataPlayer::get(pkey);
+    pub fn restart_object(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = AutomataPlayer::get_from_pid(pid);
         match player.as_mut() {
-            None => ERROR_PLAYER_ALREADY_EXIST,
+            None => Err(ERROR_PLAYER_ALREADY_EXIST),
             Some(player) => {
                 player.check_and_inc_nonce(self.nonce);
-                player.store();
-                let oid = player.get_obj_id(self.objindex);
-                let counter = QUEUE.0.borrow().counter;
-                let data = &self.data;
-                if let Some((delay, modifier)) = restart_object_modifier(&oid, /*QUEUE.0.borrow().*/counter, data) {
-                    QUEUE
-                        .0
-                        .borrow_mut()
-                        .insert(self.objindex, pkey, delay, modifier);
+                player.data.pay_cost()?;
+                let counter = STATE.0.borrow().queue.counter;
+                let data = self.data.iter().map(|x| *x as u8).collect::<Vec<_>>();
+                if let Some(delay) = player.data.restart_object_card(
+                    self.objindex,
+                    data.try_into().unwrap(),
+                    counter,
+                ) {
+                    STATE.0.borrow_mut().queue.insert(Event {
+                        object_index: self.objindex,
+                        owner: *pid,
+                        delta: delay,
+                    });
                 }
-                0 // no error occurred
+                player.store();
+                Ok(())
             }
         }
     }
 
-    pub fn withdraw(&self, pkey: &[u64; 4]) -> u32 {
-        let mut player = AutomataPlayer::get(pkey);
+    pub fn upgrade_object(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = AutomataPlayer::get_from_pid(pid);
         match player.as_mut() {
-            None => ERROR_PLAYER_NOT_EXIST,
+            None => Err(ERROR_PLAYER_ALREADY_EXIST),
             Some(player) => {
                 player.check_and_inc_nonce(self.nonce);
-                if let Some(treasure) = player.data.local.0.last_mut() {
-                    let amount = self.data[0] & 0xffffffff;
-                    unsafe { require(*treasure >= (amount as i64)) };
-                    *treasure -= amount as i64;
-                    let withdrawinfo = WithdrawInfo::new(&[
-                        self.data[0],
-                        self.data[1],
-                        self.data[2]
-                    ]);
-                    SettlementInfo::append_settlement(withdrawinfo);
-                    player.store();
+                player.data.pay_cost()?;
+                player.data.upgrade_object(self.objindex, self.data[0]);
+                player.store();
+                Ok(())
+            }
+        }
+    }
+
+    pub fn bounty(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = AutomataPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_ALREADY_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                if let Some(v) = player.data.local.0.get(self.data[0] as usize) {
+                    let redeem_info = player.data.redeem_info[self.data[0] as usize];
+                    let cost = CONFIG.get_bounty_cost(redeem_info as u64);
+                    if *v > cost as i64 {
+                        player.data.local.0[self.data[0] as usize] = v - (cost as i64);
+                        player.data.redeem_info[self.data[0] as usize] += 1;
+                        let reward = CONFIG.get_bounty_reward(redeem_info as u64);
+                        player.data.cost_balance(-(reward as i64))?;
+                        player.store();
+                        Ok(())
+                    } else {
+                        Err(ERROR_NOT_ENOUGH_RESOURCE)
+                    }
                 } else {
-                    unreachable!();
+                    Err(ERROR_INDEX_OUT_OF_BOUND)
                 }
-                0
             }
         }
     }
 
-    pub fn deposit(&self, pkey: &[u64; 4]) -> u32 {
-        let mut admin = AutomataPlayer::get(pkey).unwrap();
+    pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = AutomataPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                let amount = self.data[0] & 0xffffffff;
+                player.data.cost_balance(amount as i64)?;
+                let withdrawinfo =
+                    WithdrawInfo::new(&[self.data[0], self.data[1], self.data[2]], 0);
+                SettlementInfo::append_settlement(withdrawinfo);
+                player.store();
+                Ok(())
+            }
+        }
+    }
+
+    pub fn deposit(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut admin = AutomataPlayer::get_from_pid(pid).unwrap();
         admin.check_and_inc_nonce(self.nonce);
         let mut player = AutomataPlayer::get_from_pid(&[self.data[0], self.data[1]]);
         match player.as_mut() {
             None => {
                 let mut player = AutomataPlayer::new_from_pid([self.data[0], self.data[1]]);
                 player.check_and_inc_nonce(self.nonce);
-                if let Some (treasure) = player.data.local.0.last_mut() {
-                    *treasure += self.data[2] as i64;
-                    player.store();
-                } else {
-                    unreachable!();
-                }
-            },
+                player.data.cost_balance(-(self.data[2] as i64))?;
+                player.store();
+            }
             Some(player) => {
                 player.check_and_inc_nonce(self.nonce);
-                if let Some(treasure) = player.data.local.0.last_mut() {
-                    *treasure += self.data[2] as i64;
-                    //let t = player.data.local.0.last().unwrap();
-                    player.store();
-                } else {
-                    unreachable!();
-                }
+                player.data.cost_balance(-(self.data[2] as i64))?;
+                player.store();
             }
         };
-        0 // no error occurred
+        Ok(()) // no error occurred
     }
 
+    pub fn install_card(&self, pid: &[u64; 2], rand: &[u64; 4]) -> Result<(), u32> {
+        let mut player = AutomataPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                player.data.pay_cost()?;
+                player.data.generate_card(rand);
+                player.store();
+                Ok(())
+            }
+        }
+    }
 
-    pub fn process(&self, pkey: &[u64; 4], _rand: &[u64; 4]) -> u32 {
+    pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
         let b = match self.command {
-            INSTALL_PLAYER => self.install_player(pkey),
-            INSTALL_OBJECT => self.install_object(pkey),
-            RESTART_OBJECT => self.restart_object(pkey),
-            WITHDRAW => self.withdraw(pkey),
-            DEPOSIT => self.deposit(pkey),
+            INSTALL_PLAYER => self
+                .install_player(&AutomataPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            INSTALL_OBJECT => self
+                .install_object(&AutomataPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            RESTART_OBJECT => self
+                .restart_object(&AutomataPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            UPGRADE_OBJECT => self
+                .upgrade_object(&AutomataPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            WITHDRAW => self
+                .withdraw(&AutomataPlayer::pkey_to_pid(pkey))
+                .map_or_else(|e| e, |_| 0),
+            INSTALL_CARD => self
+                .install_card(&AutomataPlayer::pkey_to_pid(pkey), rand)
+                .map_or_else(|e| e, |_| 0),
+            DEPOSIT => {
+                unsafe { require(*pkey == *ADMIN_PUBKEY) };
+                self.deposit(&[self.data[0], self.data[1]])
+                    .map_or_else(|e| e, |_| 0)
+            },
+            BOUNTY => self
+                .bounty(&AutomataPlayer::pkey_to_pid(pkey))
+                .map_or_else(|e| e, |_| 0),
+
             _ => {
-                QUEUE.0.borrow_mut().tick();
+                unsafe { require(*pkey == *ADMIN_PUBKEY) };
+                //zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
+                STATE.0.borrow_mut().queue.tick();
                 0
             }
         };
         b
     }
+}
 
-    pub fn automaton() {
-        QUEUE.0.borrow_mut().tick();
+pub struct SafeState(RefCell<State>);
+unsafe impl Sync for SafeState {}
+
+lazy_static::lazy_static! {
+    pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
+}
+
+pub struct State {
+    supplier: u64,
+    queue: EventQueue<Event>,
+}
+
+impl State {
+    pub fn new() -> Self {
+        State {
+            supplier: 1000,
+            queue: EventQueue::new(),
+        }
+    }
+    pub fn snapshot() -> String {
+        let counter = STATE.0.borrow().queue.counter;
+        serde_json::to_string(&counter).unwrap()
+    }
+    pub fn get_state(pid: Vec<u64>) -> String {
+        let player = AutomataPlayer::get(&pid.try_into().unwrap()).unwrap();
+        serde_json::to_string(&player).unwrap()
+    }
+
+    pub fn preempt() -> bool {
+        let counter = STATE.0.borrow().queue.counter;
+        if counter % 30 == 0 {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn flush_settlement() -> Vec<u8> {
+        SettlementInfo::flush_settlement()
+    }
+
+    pub fn rand_seed() -> u64 {
+        0
+    }
+
+    pub fn store() {
+        let mut state = STATE.0.borrow_mut();
+        let mut v = Vec::with_capacity(state.queue.list.len() + 10);
+        v.push(state.supplier);
+        state.queue.to_data(&mut v);
+        let kvpair = unsafe { &mut MERKLE_MAP };
+        kvpair.set(&[0, 0, 0, 0], v.as_slice());
+        state.queue.store();
+        let root = kvpair.merkle.root.clone();
+        zkwasm_rust_sdk::dbg!("root after store: {:?}\n", root);
+    }
+    pub fn initialize() {
+        let mut state = STATE.0.borrow_mut();
+        let kvpair = unsafe { &mut MERKLE_MAP };
+        let mut data = kvpair.get(&[0, 0, 0, 0]);
+        if !data.is_empty() {
+            let mut data = data.iter_mut();
+            state.supplier = *data.next().unwrap();
+            state.queue = EventQueue::from_data(&mut data);
+        }
     }
 }

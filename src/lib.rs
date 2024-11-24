@@ -1,8 +1,12 @@
+#![feature(linked_list_cursors)]
 use wasm_bindgen::prelude::*;
 use zkwasm_rest_abi::*;
+pub mod card;
 pub mod config;
+pub mod error;
 pub mod events;
-pub mod settlement;
+pub mod object;
+pub mod player;
 pub mod state;
 
 use crate::config::Config;

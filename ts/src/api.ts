@@ -29,8 +29,10 @@ function addrToParams(bn: BN): Array<bigint> {
 const CMD_INSTALL_PLAYER = 1n;
 const CMD_INSTALL_OBJECT = 2n;
 const CMD_RESTART_OBJECT = 3n;
-const CMD_WITHDRAW= 4n;
-const CMD_DEPOSIT = 5n;
+const CMD_UPGRADE_OBJECT = 4n;
+const CMD_INSTALL_CARD = 5n;
+const CMD_WITHDRAW= 6n;
+const CMD_DEPOSIT = 7n;
 
 function createCommand(nonce: bigint, command: bigint, objindex: bigint) {
   return (nonce << 16n) + (objindex << 8n) + command;
@@ -64,7 +66,7 @@ export class Player {
 
   async getNonce(): Promise<bigint> {
     const data = await this.getState();
-    let nonce = BigInt(data[0].nonce);
+    let nonce = BigInt(data.player.nonce);
     return nonce;
   }
 
@@ -83,11 +85,11 @@ export class Player {
     }
   }
 
-  async installObject(modifiers: Array<bigint>) {
+  async installObject(objid: bigint, modifiers: Array<bigint>) {
     let nonce = await this.getNonce();
     try {
       let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_INSTALL_OBJECT, 0n), encode_modifier(modifiers), 0n, 0n]),
+        new BigUint64Array([createCommand(nonce, CMD_INSTALL_OBJECT, objid), encode_modifier(modifiers), 0n, 0n]),
         this.processingKey
       );
       console.log("installObject processed at:", finished);
@@ -96,6 +98,57 @@ export class Player {
         console.log(e.message);
       }
       console.log("installObject error at modifiers:", modifiers, "processing key:", this.processingKey);
+    }
+  }
+
+  async restartObject(objid: bigint, modifiers: Array<bigint>) {
+    let nonce = await this.getNonce();
+    try {
+      let finished = await rpc.sendTransaction(
+        new BigUint64Array([createCommand(nonce, CMD_RESTART_OBJECT, objid), encode_modifier(modifiers), 0n, 0n]),
+        this.processingKey
+      );
+      console.log("restartObject processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e);
+        console.log(e.message);
+      }
+      console.log("restart object error", "processing key:", this.processingKey);
+    }
+  }
+
+  async upgradeObject(objid: bigint) {
+    let nonce = await this.getNonce();
+    try {
+      let finished = await rpc.sendTransaction(
+        new BigUint64Array([createCommand(nonce, CMD_UPGRADE_OBJECT, objid), 0n, 0n, 0n]),
+        this.processingKey
+      );
+      console.log("upgradeObject processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("upgrade object error", "processing key:", this.processingKey);
+    }
+  }
+
+
+
+  async installCard() {
+    let nonce = await this.getNonce();
+    try {
+      let finished = await rpc.sendTransaction(
+        new BigUint64Array([createCommand(nonce, CMD_INSTALL_CARD, 0n), 0n, 0n, 0n]),
+        this.processingKey
+      );
+      console.log("installCard processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("installCard error with processing key:", this.processingKey);
     }
   }
 
