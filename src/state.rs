@@ -34,21 +34,24 @@ pub struct Transaction {
     pub data: Vec<u64>,
 }
 
-const INSTALL_PLAYER: u64 = 1;
-const INSTALL_OBJECT: u64 = 2;
-const RESTART_OBJECT: u64 = 3;
-const UPGRADE_OBJECT: u64 = 4;
-const INSTALL_CARD: u64 = 5;
-const WITHDRAW: u64 = 6;
-const DEPOSIT: u64 = 7;
-const BOUNTY: u64 = 8;
+
+const INIT_PLAYER: u64 = 1; // 新用户
+const BUY_ELF: u64 = 2; // 购买精灵
+const FEED_ELF: u64 = 3; // 喂食精灵
+const CLEAN_RANCH: u64 = 4; // 清洁牧场
+const TREAT_ELF: u64 = 5; // 治疗宠物
+const SELL_ELF: u64 = 6; // 卖出精灵
+
+const WITHDRAW: u64 = 7; // 充值
+const DEPOSIT: u64 = 8; // 提现
+const BOUNTY: u64 = 9;
 
 impl Transaction {
     pub fn decode_error(e: u32) -> &'static str {
         match e {
             ERROR_PLAYER_NOT_EXIST => "PlayerNotExist",
             ERROR_PLAYER_ALREADY_EXIST => "PlayerAlreadyExist",
-            ERROR_NOT_ENOUGH_BALANCE => "NotEnoughBalance",
+            ERROR_NOT_GOLD_BALANCE => "NotGoldBalance",
             ERROR_INDEX_OUT_OF_BOUND => "IndexOutofBound",
             ERROR_NOT_ENOUGH_RESOURCE => "NotEnoughResource",
             _ => "Unknown",
@@ -236,7 +239,7 @@ impl Transaction {
 
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
         let b = match self.command {
-            INSTALL_PLAYER => self
+            INIT_PLAYER => self
                 .install_player(&AutomataPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             INSTALL_OBJECT => self

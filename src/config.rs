@@ -1,4 +1,4 @@
-use crate::card::Card;
+use crate::elf::Elf;
 use serde::Serialize;
 
 pub const ENTITY_ATTRIBUTES_SIZE: usize = 4; //level speed efficiency productivity

@@ -1,4 +1,4 @@
-use crate::card::{Card, DEFAULT_CARDS};
+use crate::elf::{Elf, DEFAULT_CARDS};
 use crate::config::COST_INCREASE_ROUND;
 use crate::config::{default_local, random_modifier, INITIAL_ENERGY};
 use crate::error::ERROR_NOT_ENOUGH_BALANCE;
@@ -8,6 +8,7 @@ use crate::StorageData;
 use crate::MERKLE_MAP;
 use serde::Serialize;
 use std::slice::IterMut;
+use crate::prop::Prop;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Attributes(pub Vec<i64>);
@@ -28,25 +29,25 @@ impl Attributes {
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
-    pub energy: u16, // this is collected from the supplier
-    pub cost_info: u16,
-    pub current_cost: u32,
-    pub redeem_info: [u8; 8],
-    pub objects: Vec<Object>,
-    pub local: Attributes,
-    pub cards: Vec<Card>,
+    pub gold_count: u32, // 累计金币数量
+    pub clean_count: u32, // 累计清洁次数
+    pub feed_count: u32, // 累计喂食次数
+    pub gold_balance: u32, // 金币余额
+    pub ranch_clean: u16, // 牧场清洁度
+    pub elfs: Vec<Elf>, // 拥有的精灵
+    pub props: Vec<Prop>, // 拥有的道具
 }
 
 impl Default for PlayerData {
     fn default() -> Self {
         Self {
-            energy: INITIAL_ENERGY,
-            cost_info: COST_INCREASE_ROUND,
-            current_cost: 0,
-            redeem_info: [0; 8],
-            objects: vec![],
-            local: Attributes::default_local(),
-            cards: DEFAULT_CARDS.clone(),
+            gold_count: 0,
+            clean_count: 0,
+            feed_count: 0,
+            gold_balance: 120, // 新用户默认给120个金币
+            ranch_clean: 0,
+            elfs: !vec![],
+            props: !vec![],
         }
     }
 }
@@ -58,6 +59,23 @@ impl Attributes {
 }
 
 impl PlayerData {
+
+    // 清理牧场
+    pub fn clean_ranch(&mut self) {
+        if self.ranch_clean >0 {
+            self.ranch_clean = 0;
+            self.clean_count += 1;
+        }
+    }
+
+    pub fn feed_elf(&mut self, index: usize) {
+        for elf in self.elfs {
+            // 在这里处理每个精灵，例如打印其信息或调用其方法
+            println!("{:?}", elf);
+            elf.
+        }
+        self.feed_count += 1;
+    }
     pub fn generate_card(&mut self, rand: &[u64; 4]) {
         let new_card = random_modifier(self.local.0.clone().try_into().unwrap(), rand[1]);
         self.cards.push(new_card)
@@ -185,9 +203,9 @@ impl StorageData for PlayerData {
         }
 
         let card_size = *u64data.next().unwrap();
-        let mut cards = Vec::with_capacity(card_size as usize);
+        let mut elfs = Vec::with_capacity(card_size as usize);
         for _ in 0..card_size {
-            cards.push(Card::from_data(u64data));
+            elfs.push(Elf::from_data(u64data));
         }
         PlayerData {
             energy: ((cost_info >> 48) & 0xffff) as u16,
@@ -221,7 +239,7 @@ impl StorageData for PlayerData {
     }
 }
 
-pub type AutomataPlayer = Player<PlayerData>;
+pub type ElfPlayer = Player<PlayerData>;
 
 pub trait Owner: Sized {
     fn store(&self);
@@ -229,7 +247,7 @@ pub trait Owner: Sized {
     fn get(pkey: &[u64; 4]) -> Option<Self>;
 }
 
-impl Owner for AutomataPlayer {
+impl Owner for ElfPlayer {
     fn store(&self) {
         zkwasm_rust_sdk::dbg!("store player\n");
         let mut data = Vec::new();
