@@ -1,8 +1,4 @@
-use crate::elf::{Elf, DEFAULT_CARDS};
-use crate::config::COST_INCREASE_ROUND;
-use crate::config::{default_local, random_modifier, INITIAL_ENERGY};
-use crate::error::ERROR_NOT_ENOUGH_BALANCE;
-use crate::object::Object;
+use crate::elf::{Elf};
 use crate::Player;
 use crate::StorageData;
 use crate::MERKLE_MAP;
@@ -10,22 +6,6 @@ use serde::Serialize;
 use std::slice::IterMut;
 use crate::prop::Prop;
 
-#[derive(Clone, Debug, Serialize)]
-pub struct Attributes(pub Vec<i64>);
-
-impl Attributes {
-    pub fn apply_modifier(&mut self, m: &Attributes) -> bool {
-        for (a, b) in self.0.iter().zip(m.0.iter()) {
-            if *a + *b < 0 {
-                return false;
-            }
-        }
-        for (a, b) in self.0.iter_mut().zip(m.0.iter()) {
-            *a += *b;
-        }
-        return true;
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
@@ -46,17 +26,12 @@ impl Default for PlayerData {
             feed_count: 0,
             gold_balance: 120, // 新用户默认给120个金币
             ranch_clean: 0,
-            elfs: !vec![],
-            props: !vec![],
+            elfs: vec![],
+            props: vec![],
         }
     }
 }
 
-impl Attributes {
-    fn default_local() -> Self {
-        Attributes(default_local().to_vec())
-    }
-}
 
 impl PlayerData {
 
@@ -69,174 +44,73 @@ impl PlayerData {
     }
 
     pub fn feed_elf(&mut self, index: usize) {
-        for elf in self.elfs {
+        for elf in &mut self.elfs {
             // 在这里处理每个精灵，例如打印其信息或调用其方法
             println!("{:?}", elf);
-            elf.
         }
         self.feed_count += 1;
     }
-    pub fn generate_card(&mut self, rand: &[u64; 4]) {
-        let new_card = random_modifier(self.local.0.clone().try_into().unwrap(), rand[1]);
-        self.cards.push(new_card)
-    }
 
-    pub fn pay_cost(&mut self) -> Result<(), u32> {
-        self.cost_balance(self.current_cost as i64)?;
-        self.cost_info -= 1;
-        if self.cost_info == 0 {
-            self.cost_info = COST_INCREASE_ROUND;
-            if self.current_cost != 0 {
-                self.current_cost = self.current_cost * 2
-            } else {
-                self.current_cost = 1;
-            }
-        }
-        let energy = (self.energy as u32) + 20;
-        if energy > 0xffff {
-            self.energy = 0xffff
-        } else {
-            self.energy += 20;
-        }
-        Ok(())
-    }
 
-    pub fn cost_balance(&mut self, b: i64) -> Result<(), u32> {
-        if let Some(treasure) = self.local.0.last_mut() {
-            if *treasure >= b {
-                *treasure -= b;
-                Ok(())
-            } else {
-                Err(ERROR_NOT_ENOUGH_BALANCE)
-            }
-        } else {
-            unreachable!();
-        }
-    }
-
-    pub fn upgrade_object(&mut self, object_index: usize, index: u64) {
-        let object = self.objects.get_mut(object_index).unwrap();
-        unsafe { zkwasm_rust_sdk::require(object.attributes[0] < 128) };
-        object.attributes[0] += 1;
-        object.attributes[index as usize] += 1;
-    }
-
-    pub fn apply_object_card(&mut self, object_index: usize, counter: u64) -> Option<usize> {
-        let object = self.objects[object_index].clone();
-        let current_index = object.get_modifier_index() as usize;
-        if object.is_restarting() {
-            //zkwasm_rust_sdk::dbg!("is restarting !\n");
-            let next_index = 0;
-            let duration = self.cards[object.cards[next_index] as usize].duration;
-            let object = self.objects.get_mut(object_index).unwrap();
-            object.start_new_modifier(next_index, counter);
-            Some(duration as usize)
-        } else {
-            let card = self.cards[object.cards[current_index] as usize].clone();
-            let applied = self.apply_modifier(&card);
-            zkwasm_rust_sdk::dbg!("applied modifier!\n");
-            let object = self.objects.get_mut(object_index).unwrap();
-            if applied {
-                //zkwasm_rust_sdk::dbg!("object after: {:?}\n", object);
-                //zkwasm_rust_sdk::dbg!("player after: {:?}\n", {&self.local});
-                let next_index = (current_index + 1) % object.cards.len();
-                let duration = self.cards[object.cards[next_index] as usize].duration;
-                object.start_new_modifier(next_index, counter);
-                Some(duration as usize)
-            } else {
-                object.halt();
-                None
-            }
-        }
-    }
-
-    pub fn restart_object_card(
-        &mut self,
-        object_index: usize,
-        data: [u8; 8],
-        counter: u64,
-    ) -> Option<usize> {
-        let object = self.objects.get_mut(object_index).unwrap();
-        let halted = object.is_halted();
-        if halted {
-            // modify object with new modifiers
-            object.reset_modifier(data);
-            let modifier_index = object.get_modifier_index();
-            let duration = self.cards[object.cards[modifier_index as usize] as usize].duration;
-            object.restart(counter);
-            zkwasm_rust_sdk::dbg!("object restarted\n");
-            Some(duration as usize)
-        } else {
-            object.reset_modifier(data);
-            object.reset_halt_bit_to_restart();
-            None
-        }
-    }
-    pub fn apply_modifier(&mut self, m: &Card) -> bool {
-        let m = m.attributes.iter().map(|x| *x as i64).collect::<Vec<_>>();
-        for (a, b) in self.local.0.iter().zip(m.iter()) {
-            if *a + *b < 0 {
-                return false;
-            }
-        }
-        for (a, b) in self.local.0.iter_mut().zip(m.iter()) {
-            *a += *b;
-        }
-        return true;
-    }
 }
 
 impl StorageData for PlayerData {
     fn from_data(u64data: &mut IterMut<u64>) -> Self {
-        let cost_info = *u64data.next().unwrap();
-        let redeem_info = *u64data.next().unwrap();
-        let objects_size = *u64data.next().unwrap();
-        let mut objects = Vec::with_capacity(objects_size as usize);
-        for _ in 0..objects_size {
-            objects.push(Object::from_data(u64data));
+        // 读取基础数据
+        let gold_count = *u64data.next().unwrap() as u32;
+        let clean_count = *u64data.next().unwrap() as u32;
+        let feed_count = *u64data.next().unwrap() as u32;
+        let gold_balance = *u64data.next().unwrap() as u32;
+        let ranch_clean = *u64data.next().unwrap() as u16;
+
+        // 读取精灵数据
+        let elfs_count = *u64data.next().unwrap() as usize; // 读取精灵数量
+        let mut elfs = Vec::with_capacity(elfs_count);
+        for _ in 0..elfs_count {
+            let elf = Elf::from_data(u64data); // 使用 Elf 的 from_data 方法解析每个精灵
+            elfs.push(elf);
         }
 
-        let local_size = *u64data.next().unwrap();
-        let mut local = Vec::with_capacity(local_size as usize);
-        for _ in 0..local_size {
-            local.push(*u64data.next().unwrap() as i64);
+        // 读取道具数据
+        let props_count = *u64data.next().unwrap() as usize; // 读取道具数量
+        let mut props = Vec::with_capacity(props_count);
+        for _ in 0..props_count {
+            let prop = Prop::from_data(u64data); // 假设 Prop 类型也有 from_data 方法
+            props.push(prop);
         }
 
-        let card_size = *u64data.next().unwrap();
-        let mut elfs = Vec::with_capacity(card_size as usize);
-        for _ in 0..card_size {
-            elfs.push(Elf::from_data(u64data));
-        }
         PlayerData {
-            energy: ((cost_info >> 48) & 0xffff) as u16,
-            cost_info: ((cost_info >> 32) & 0xffff) as u16,
-            redeem_info: redeem_info.to_le_bytes(),
-            current_cost: (cost_info & 0xffffffff) as u32,
-            objects,
-            local: Attributes(local),
-            cards,
+            gold_count,
+            clean_count,
+            feed_count,
+            gold_balance,
+            ranch_clean,
+            elfs,
+            props,
         }
     }
+
     fn to_data(&self, data: &mut Vec<u64>) {
-        data.push(
-            ((self.energy as u64) << 48)
-                + ((self.cost_info as u64) << 32)
-                + (self.current_cost as u64),
-        );
-        data.push(u64::from_le_bytes(self.redeem_info));
-        data.push(self.objects.len() as u64);
-        for c in self.objects.iter() {
-            c.to_data(data);
+        // 将基础数据推入数据流
+        data.push(self.gold_count as u64);
+        data.push(self.clean_count as u64);
+        data.push(self.feed_count as u64);
+        data.push(self.gold_balance as u64);
+        data.push(self.ranch_clean as u64);
+
+        // 将精灵数据推入数据流
+        data.push(self.elfs.len() as u64); // 先推入精灵数量
+        for elf in &self.elfs {
+            elf.to_data(data); // 使用 Elf 的 to_data 方法将每个精灵转回数据
         }
-        data.push(self.local.0.len() as u64);
-        for c in self.local.0.iter() {
-            data.push(*c as u64);
-        }
-        data.push(self.cards.len() as u64);
-        for c in self.cards.iter() {
-            c.to_data(data);
+
+        // 将道具数据推入数据流
+        data.push(self.props.len() as u64); // 先推入道具数量
+        for prop in &self.props {
+            prop.to_data(data); // 使用 Prop 的 to_data 方法将每个道具转回数据
         }
     }
+
 }
 
 pub type ElfPlayer = Player<PlayerData>;

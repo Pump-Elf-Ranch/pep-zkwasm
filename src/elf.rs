@@ -1,8 +1,8 @@
-use crate::config::LOCAL_ATTRIBUTES_SIZE;
 use serde::Serialize;
 use std::slice::IterMut;
 use zkwasm_rest_abi::StorageData;
 use lazy_static::lazy_static;
+use std::str; // 导入 std::str 模块
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Elf {
@@ -45,16 +45,55 @@ impl Elf {
 
 impl StorageData for Elf {
     fn from_data(u64data: &mut IterMut<u64>) -> Self {
-        let duration = *u64data.next().unwrap();
-        let attributes = (*u64data.next().unwrap()).to_le_bytes();
+        // 从数据流中提取每个字段
+        let id = *u64data.next().unwrap(); // 精灵id
+        let name_bytes = u64data.next().unwrap().to_le_bytes(); // 读取存储名字的字节,假设名字是存储在字节数组中的
+        let health = *u64data.next().unwrap(); // 健康度
+        let satiety = *u64data.next().unwrap(); // 饱腹度
+        let exp = *u64data.next().unwrap(); // 经验值
+        let growth_time = *u64data.next().unwrap(); // 成长时间
+        let grade = *u64data.next().unwrap(); // 品质等级
+        let max_gold_store = *u64data.next().unwrap(); // 最大金币存储量
+        let current_gold_produce = *u64data.next().unwrap(); // 当前金币产出基础值
+        let elf_type = *u64data.next().unwrap(); // 精灵类型
+
+        // 假设名字长度不超过 8 字节,可以直接从字节数组构造字符串
+        let name = match String::from_utf8(name_bytes.to_vec()) {
+            Ok(s) => Box::leak(s.into_boxed_str()), // 将 String 转换为 'static str
+            Err(_) => "",
+        };
+
+
+        // 返回一个 Elf 实例
         Elf {
             id,
-            attributes: attributes.map(|x| x as i8),
+            name,
+            health,
+            satiety,
+            exp,
+            growth_time,
+            grade,
+            max_gold_store,
+            current_gold_produce,
+            elf_type,
         }
     }
     fn to_data(&self, data: &mut Vec<u64>) {
-        data.push(self.id);
-        data.push(u64::from_le_bytes(self.attributes.map(|x| x as u8)));
+        data.push(self.id); // 将 id 推入 `data`
+
+        // 假设 `name` 是 UTF-8 字符串,转为字节数组并存储
+        let name_bytes = self.name.as_bytes();
+        let name_u64 = u64::from_le_bytes(name_bytes.try_into().unwrap_or([0; 8])); // 转换为 u64 格式
+        data.push(name_u64);
+
+        data.push(self.health); // 健康度
+        data.push(self.satiety); // 饱腹度
+        data.push(self.exp); // 经验值
+        data.push(self.growth_time); // 成长时间
+        data.push(self.grade); // 品质等级
+        data.push(self.max_gold_store); // 最大金币存储量
+        data.push(self.current_gold_produce); // 当前金币产出基础值
+        data.push(self.elf_type); // 精灵类型
     }
 }
 
@@ -120,73 +159,73 @@ impl ElfGradeRandom {
 lazy_static::lazy_static! {
     pub static ref DEFAULT_STAND_ELF: Vec<StandElf> = vec![
         // Hippo
-        StandElf::new(1, "Hippo", 100, 50, 5, 18, 1，1,100),
-        StandElf::new(2, "Hippo", 100, 75,  10, 18, 1，2,100),
-        StandElf::new(3, "Hippo", 100, 100,  15, 18, 1，3,100),
-        StandElf::new(4, "Hippo", 100, 150, 20, 18, 1，4,100),
-        StandElf::new(5, "Hippo", 100, 200, 30, 18, 1，5,100),
+        StandElf::new(1, "Hippo", 100, 50, 5, 18, 1,1,100),
+        StandElf::new(2, "Hippo", 100, 75,  10, 18, 1,2,100),
+        StandElf::new(3, "Hippo", 100, 100,  15, 18, 1,3,100),
+        StandElf::new(4, "Hippo", 100, 150, 20, 18, 1,4,100),
+        StandElf::new(5, "Hippo", 100, 200, 30, 18, 1,5,100),
         // Slerf
-        StandElf::new(6, "Slerf", 300, 50, 5, 30, 2，1, 300),
-        StandElf::new(7, "Slerf", 300, 75,  10, 30, 2，2, 300),
-        StandElf::new(8, "Slerf", 300, 100,  15, 30, 2，3, 300),
-        StandElf::new(9, "Slerf", 300, 150, 20, 30, 2，4, 300),
-        StandElf::new(10, "Slerf", 300, 200, 30, 30, 2，5, 300),
+        StandElf::new(6, "Slerf", 300, 50, 5, 30, 2,1, 300),
+        StandElf::new(7, "Slerf", 300, 75,  10, 30, 2,2, 300),
+        StandElf::new(8, "Slerf", 300, 100,  15, 30, 2,3, 300),
+        StandElf::new(9, "Slerf", 300, 150, 20, 30, 2,4, 300),
+        StandElf::new(10, "Slerf", 300, 200, 30, 30, 2,5, 300),
 
          // Goat
-        StandElf::new(11, "Goat", 1800, 50, 5, 50, 3，1, 1800),
-        StandElf::new(12, "Goat", 1800, 75,  10, 50, 3，2, 1800),
-        StandElf::new(13, "Goat", 1800, 100,  15, 50, 3，3, 1800),
-        StandElf::new(14, "Goat", 1800, 150, 20, 50, 3，4, 1800),
-        StandElf::new(15, "Goat", 1800, 200, 30, 50, 3，5, 1800),
+        StandElf::new(11, "Goat", 1800, 50, 5, 50, 3,1, 1800),
+        StandElf::new(12, "Goat", 1800, 75,  10, 50, 3,2, 1800),
+        StandElf::new(13, "Goat", 1800, 100,  15, 50, 3,3, 1800),
+        StandElf::new(14, "Goat", 1800, 150, 20, 50, 3,4, 1800),
+        StandElf::new(15, "Goat", 1800, 200, 30, 50, 3,5, 1800),
 
         // Pnut
-        StandElf::new(16, "Pnut", 6000, 80, 5, 70, 4，1, 6000),
-        StandElf::new(17, "Pnut", 6000, 160,  10, 70, 4，2, 6000),
-        StandElf::new(18, "Pnut", 6000, 210,  15, 70, 4，3, 6000),
-        StandElf::new(19, "Pnut", 6000, 280, 20, 70, 4，4, 6000),
-        StandElf::new(20, "Pnut", 6000, 300, 30, 70, 4，5, 6000),
+        StandElf::new(16, "Pnut", 6000, 80, 5, 70, 4,1, 6000),
+        StandElf::new(17, "Pnut", 6000, 160,  10, 70, 4,2, 6000),
+        StandElf::new(18, "Pnut", 6000, 210,  15, 70, 4,3, 6000),
+        StandElf::new(19, "Pnut", 6000, 280, 20, 70, 4,4, 6000),
+        StandElf::new(20, "Pnut", 6000, 300, 30, 70, 4,5, 6000),
 
         // Popcat
-        StandElf::new(21, "Popcat", 15000, 80, 5, 100, 5，1, 15000),
-        StandElf::new(22, "Popcat", 15000, 160,  10, 100, 5，2, 15000),
-        StandElf::new(23, "Popcat", 15000, 210,  15, 100, 5，3, 15000),
-        StandElf::new(24, "Popcat", 15000, 280, 20, 100, 5，4, 15000),
-        StandElf::new(25, "Popcat", 15000, 300, 30, 100, 5，5, 15000),
+        StandElf::new(21, "Popcat", 15000, 80, 5, 100, 5,1, 15000),
+        StandElf::new(22, "Popcat", 15000, 160,  10, 100, 5,2, 15000),
+        StandElf::new(23, "Popcat", 15000, 210,  15, 100, 5,3, 15000),
+        StandElf::new(24, "Popcat", 15000, 280, 20, 100, 5,4, 15000),
+        StandElf::new(25, "Popcat", 15000, 300, 30, 100, 5,5, 15000),
 
         // Brett
-        StandElf::new(26, "Brett", 37500, 80, 5, 120, 6，1, 37500),
-        StandElf::new(27, "Brett", 37500, 160,  10, 120, 6，2, 37500),
-        StandElf::new(28, "Brett", 37500, 210,  15, 120, 6，3, 37500),
-        StandElf::new(29, "Brett", 37500, 280, 20, 120, 6，4, 37500),
-        StandElf::new(30, "Brett", 37500, 300, 30, 120, 6，5, 37500),
+        StandElf::new(26, "Brett", 37500, 80, 5, 120, 6,1, 37500),
+        StandElf::new(27, "Brett", 37500, 160,  10, 120, 6,2, 37500),
+        StandElf::new(28, "Brett", 37500, 210,  15, 120, 6,3, 37500),
+        StandElf::new(29, "Brett", 37500, 280, 20, 120, 6,4, 37500),
+        StandElf::new(30, "Brett", 37500, 300, 30, 120, 6,5, 37500),
 
         // Wif
-        StandElf::new(31, "Wif", 93750, 80, 5, 150, 7，1, 93750),
-        StandElf::new(32, "Wif", 93750, 160,  10, 150, 7，2, 93750),
-        StandElf::new(33, "Wif", 93750, 210,  15, 150, 7，3, 93750),
-        StandElf::new(34, "Wif", 93750, 280, 20, 150, 7，4, 93750),
-        StandElf::new(35, "Wif", 93750, 300, 30, 150, 7，5, 93750),
+        StandElf::new(31, "Wif", 93750, 80, 5, 150, 7,1, 93750),
+        StandElf::new(32, "Wif", 93750, 160,  10, 150, 7,2, 93750),
+        StandElf::new(33, "Wif", 93750, 210,  15, 150, 7,3, 93750),
+        StandElf::new(34, "Wif", 93750, 280, 20, 150, 7,4, 93750),
+        StandElf::new(35, "Wif", 93750, 300, 30, 150, 7,5, 93750),
 
         // Bonk
-        StandElf::new(36, "Bonk", 152000, 80, 5, 190, 8，1, 152000),
-        StandElf::new(37, "Bonk", 152000, 160,  10, 190, 8，2, 152000),
-        StandElf::new(38, "Bonk", 152000, 210,  15, 190, 8，3, 152000),
-        StandElf::new(39, "Bonk", 152000, 280, 20, 190, 8，4, 152000),
-        StandElf::new(40, "Bonk", 152000, 300, 30, 190, 8，5, 152000),
+        StandElf::new(36, "Bonk", 152000, 80, 5, 190, 8,1, 152000),
+        StandElf::new(37, "Bonk", 152000, 160,  10, 190, 8,2, 152000),
+        StandElf::new(38, "Bonk", 152000, 210,  15, 190, 8,3, 152000),
+        StandElf::new(39, "Bonk", 152000, 280, 20, 190, 8,4, 152000),
+        StandElf::new(40, "Bonk", 152000, 300, 30, 190, 8,5, 152000),
 
         // Pepe
-        StandElf::new(41, "Pepe", 220000, 80, 5, 230, 9，1, 220000),
-        StandElf::new(42, "Pepe", 220000, 160,  10, 230, 9，2, 220000),
-        StandElf::new(43, "Pepe", 220000, 210,  15, 230, 9，3, 220000),
-        StandElf::new(44, "Pepe", 220000, 280, 20, 230, 9，4, 220000),
-        StandElf::new(45, "Pepe", 220000, 300, 30, 230, 9，5, 220000),
+        StandElf::new(41, "Pepe", 220000, 80, 5, 230, 9,1, 220000),
+        StandElf::new(42, "Pepe", 220000, 160,  10, 230, 9,2, 220000),
+        StandElf::new(43, "Pepe", 220000, 210,  15, 230, 9,3, 220000),
+        StandElf::new(44, "Pepe", 220000, 280, 20, 230, 9,4, 220000),
+        StandElf::new(45, "Pepe", 220000, 300, 30, 230, 9,5, 220000),
 
         // Doge
-        StandElf::new(46, "Doge", 300000, 80, 5, 270, 10，1, 300000),
-        StandElf::new(47, "Doge", 300000, 160,  10, 270, 10，2, 300000),
-        StandElf::new(48, "Doge", 300000, 210,  15, 270, 10，3, 300000),
-        StandElf::new(49, "Doge", 300000, 280, 20, 270, 10，4, 300000),
-        StandElf::new(50, "Doge", 300000, 300, 30, 270, 10，5, 300000),
+        StandElf::new(46, "Doge", 300000, 80, 5, 270, 10,1, 300000),
+        StandElf::new(47, "Doge", 300000, 160,  10, 270, 10,2, 300000),
+        StandElf::new(48, "Doge", 300000, 210,  15, 270, 10,3, 300000),
+        StandElf::new(49, "Doge", 300000, 280, 20, 270, 10,4, 300000),
+        StandElf::new(50, "Doge", 300000, 300, 30, 270, 10,5, 300000),
     ];
 
     pub static ref DEFAULT_STAND_ELF_RANDOM : Vec<ElfGradeRandom> = vec![

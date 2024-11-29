@@ -1,4 +1,4 @@
-use crate::player::AutomataPlayer;
+use crate::player::ElfPlayer;
 use core::slice::IterMut;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_convention::EventHandler;
@@ -38,28 +38,28 @@ impl EventHandler for Event {
         self.delta -= d;
     }
     fn handle(&mut self, counter: u64) -> Option<Self> {
-        let owner_id = self.owner;
-        let object_index = self.object_index;
-        let mut player = AutomataPlayer::get_from_pid(&owner_id).unwrap();
-        let m = if player.data.energy == 0 {
-            player.data.objects.get_mut(object_index).unwrap().halt();
-            None
-        } else {
-            player.data.apply_object_card(object_index, counter)
-        };
-        let event = if let Some(delta) = m {
-            if player.data.objects[object_index].get_modifier_index() == 0 {
-                player.data.energy -= 1;
-            }
-            Some(Event {
-                owner: owner_id,
-                object_index,
-                delta,
-            })
-        } else {
-            None
-        };
-        player.store();
-        event
+        // let owner_id = self.owner;
+        // let object_index = self.object_index;
+        // let mut player = ElfPlayer::get_from_pid(&owner_id).unwrap();
+        // // let m = if player.data.energy == 0 {
+        // //     player.data.objects.get_mut(object_index).unwrap().halt();
+        // //     None
+        // // } else {
+        // //     player.data.apply_object_card(object_index, counter)
+        // // };
+        // let event = if let Some(delta) = m {
+        //     if player.data.objects[object_index].get_modifier_index() == 0 {
+        //         player.data.energy -= 1;
+        //     }
+        //     Some(Event {
+        //         owner: owner_id,
+        //         object_index,
+        //         delta,
+        //     })
+        // } else {
+        //     None
+        // };
+        // player.store();
+        None
     }
 }

@@ -3,7 +3,7 @@ use crate::config::CONFIG;
 use crate::error::*;
 use crate::events::Event;
 use crate::object::Object;
-use crate::player::AutomataPlayer;
+use crate::player::ElfPlayer;
 use crate::player::Owner;
 use std::cell::RefCell;
 use zkwasm_rest_abi::StorageData;
@@ -64,15 +64,10 @@ impl Transaction {
         let mut data = vec![];
         if command == WITHDRAW {
             data = vec![params[1], params[2], params[3]] // address of withdraw(Note:amount in params[1])
-        } else if command == INSTALL_OBJECT || command == RESTART_OBJECT {
-            for b in params[1].to_le_bytes() {
-                data.push(b as u64);
-            }
         } else if command == DEPOSIT {
             data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], amount
-        } else if command == UPGRADE_OBJECT {
-            data = vec![params[1]] // pkey[0], pkey[1], amount
-        } else if command == BOUNTY {
+        }
+         else if command == BOUNTY {
             data = vec![params[1]] // pkey[0], pkey[1], amount
         };
 
@@ -84,188 +79,32 @@ impl Transaction {
         }
     }
     pub fn install_player(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let player = AutomataPlayer::get_from_pid(pid);
+        let player = ElfPlayer::get_from_pid(pid);
         match player {
             Some(_) => Err(ERROR_PLAYER_ALREADY_EXIST),
             None => {
-                let player = AutomataPlayer::new_from_pid(*pid);
-                player.store();
-                Ok(())
-            }
-        }
-    }
-    pub fn install_object(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let mut player = AutomataPlayer::get_from_pid(pid);
-        match player.as_mut() {
-            None => Err(ERROR_PLAYER_NOT_EXIST),
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                let objindex = player.data.objects.len();
-                unsafe { require(objindex == self.objindex) };
-                player.data.pay_cost()?;
-                let cards = self.data.iter().map(|x| *x as u8).collect::<Vec<_>>();
-                let mut object = Object::new(cards.try_into().unwrap());
-                let counter = STATE.0.borrow().queue.counter;
-                object.start_new_modifier(0, counter);
-                let delay = player.data.cards[object.cards[0] as usize].duration;
-                player.data.objects.push(object);
-                player.store();
-                STATE.0.borrow_mut().queue.insert(Event {
-                    object_index: self.objindex,
-                    owner: *pid,
-                    delta: delay as usize,
-                });
-                Ok(()) // no error occurred
-            }
-        }
-    }
-
-    pub fn restart_object(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let mut player = AutomataPlayer::get_from_pid(pid);
-        match player.as_mut() {
-            None => Err(ERROR_PLAYER_ALREADY_EXIST),
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                player.data.pay_cost()?;
-                let counter = STATE.0.borrow().queue.counter;
-                let data = self.data.iter().map(|x| *x as u8).collect::<Vec<_>>();
-                if let Some(delay) = player.data.restart_object_card(
-                    self.objindex,
-                    data.try_into().unwrap(),
-                    counter,
-                ) {
-                    STATE.0.borrow_mut().queue.insert(Event {
-                        object_index: self.objindex,
-                        owner: *pid,
-                        delta: delay,
-                    });
-                }
+                let player = ElfPlayer::new_from_pid(*pid);
                 player.store();
                 Ok(())
             }
         }
     }
 
-    pub fn upgrade_object(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let mut player = AutomataPlayer::get_from_pid(pid);
-        match player.as_mut() {
-            None => Err(ERROR_PLAYER_ALREADY_EXIST),
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                player.data.pay_cost()?;
-                player.data.upgrade_object(self.objindex, self.data[0]);
-                player.store();
-                Ok(())
-            }
-        }
-    }
 
-    pub fn bounty(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let mut player = AutomataPlayer::get_from_pid(pid);
-        match player.as_mut() {
-            None => Err(ERROR_PLAYER_ALREADY_EXIST),
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                if let Some(v) = player.data.local.0.get(self.data[0] as usize) {
-                    let redeem_info = player.data.redeem_info[self.data[0] as usize];
-                    let cost = CONFIG.get_bounty_cost(redeem_info as u64);
-                    if *v > cost as i64 {
-                        player.data.local.0[self.data[0] as usize] = v - (cost as i64);
-                        player.data.redeem_info[self.data[0] as usize] += 1;
-                        let reward = CONFIG.get_bounty_reward(redeem_info as u64);
-                        player.data.cost_balance(-(reward as i64))?;
-                        player.store();
-                        Ok(())
-                    } else {
-                        Err(ERROR_NOT_ENOUGH_RESOURCE)
-                    }
-                } else {
-                    Err(ERROR_INDEX_OUT_OF_BOUND)
-                }
-            }
-        }
-    }
 
-    pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let mut player = AutomataPlayer::get_from_pid(pid);
-        match player.as_mut() {
-            None => Err(ERROR_PLAYER_NOT_EXIST),
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                let amount = self.data[0] & 0xffffffff;
-                player.data.cost_balance(amount as i64)?;
-                let withdrawinfo =
-                    WithdrawInfo::new(&[self.data[0], self.data[1], self.data[2]], 0);
-                SettlementInfo::append_settlement(withdrawinfo);
-                player.store();
-                Ok(())
-            }
-        }
-    }
 
-    pub fn deposit(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        let mut admin = AutomataPlayer::get_from_pid(pid).unwrap();
-        admin.check_and_inc_nonce(self.nonce);
-        let mut player = AutomataPlayer::get_from_pid(&[self.data[0], self.data[1]]);
-        match player.as_mut() {
-            None => {
-                let mut player = AutomataPlayer::new_from_pid([self.data[0], self.data[1]]);
-                player.check_and_inc_nonce(self.nonce);
-                player.data.cost_balance(-(self.data[2] as i64))?;
-                player.store();
-            }
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                player.data.cost_balance(-(self.data[2] as i64))?;
-                player.store();
-            }
-        };
-        Ok(()) // no error occurred
-    }
 
-    pub fn install_card(&self, pid: &[u64; 2], rand: &[u64; 4]) -> Result<(), u32> {
-        let mut player = AutomataPlayer::get_from_pid(pid);
-        match player.as_mut() {
-            None => Err(ERROR_PLAYER_NOT_EXIST),
-            Some(player) => {
-                player.check_and_inc_nonce(self.nonce);
-                player.data.pay_cost()?;
-                player.data.generate_card(rand);
-                player.store();
-                Ok(())
-            }
-        }
-    }
+
+
+
+
+
 
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
         let b = match self.command {
             INIT_PLAYER => self
-                .install_player(&AutomataPlayer::pkey_to_pid(&pkey))
+                .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
-            INSTALL_OBJECT => self
-                .install_object(&AutomataPlayer::pkey_to_pid(&pkey))
-                .map_or_else(|e| e, |_| 0),
-            RESTART_OBJECT => self
-                .restart_object(&AutomataPlayer::pkey_to_pid(&pkey))
-                .map_or_else(|e| e, |_| 0),
-            UPGRADE_OBJECT => self
-                .upgrade_object(&AutomataPlayer::pkey_to_pid(&pkey))
-                .map_or_else(|e| e, |_| 0),
-            WITHDRAW => self
-                .withdraw(&AutomataPlayer::pkey_to_pid(pkey))
-                .map_or_else(|e| e, |_| 0),
-            INSTALL_CARD => self
-                .install_card(&AutomataPlayer::pkey_to_pid(pkey), rand)
-                .map_or_else(|e| e, |_| 0),
-            DEPOSIT => {
-                unsafe { require(*pkey == *ADMIN_PUBKEY) };
-                self.deposit(&[self.data[0], self.data[1]])
-                    .map_or_else(|e| e, |_| 0)
-            },
-            BOUNTY => self
-                .bounty(&AutomataPlayer::pkey_to_pid(pkey))
-                .map_or_else(|e| e, |_| 0),
-
             _ => {
                 unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 //zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
@@ -301,7 +140,7 @@ impl State {
         serde_json::to_string(&counter).unwrap()
     }
     pub fn get_state(pid: Vec<u64>) -> String {
-        let player = AutomataPlayer::get(&pid.try_into().unwrap()).unwrap();
+        let player = ElfPlayer::get(&pid.try_into().unwrap()).unwrap();
         serde_json::to_string(&player).unwrap()
     }
 
