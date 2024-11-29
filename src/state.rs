@@ -106,8 +106,8 @@ impl Transaction {
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             _ => {
-                unsafe { require(*pkey == *ADMIN_PUBKEY) };
-                //zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
+                // unsafe { require(*pkey == *ADMIN_PUBKEY) };
+                // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
