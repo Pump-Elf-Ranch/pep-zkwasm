@@ -8,11 +8,11 @@ async function main() {
   await player.installPlayer();
   let data = await player.getState();
 
-  console.log("player info:");
+  console.log("player info:",data);
   console.log(JSON.stringify(data));
 
-  let config = await player.getConfig();
-  console.log("config", config);
+  // let config = await player.getConfig();
+  // console.log("config", config);
 }
 
 main();

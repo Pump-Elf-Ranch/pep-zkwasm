@@ -47,7 +47,16 @@ impl StorageData for Elf {
     fn from_data(u64data: &mut IterMut<u64>) -> Self {
         // 从数据流中提取每个字段
         let id = *u64data.next().unwrap(); // 精灵id
-        let name_bytes = u64data.next().unwrap().to_le_bytes(); // 读取存储名字的字节,假设名字是存储在字节数组中的
+        // 读取 name 长度和字节数据
+        let name_length = *u64data.next().unwrap() as usize;
+        let mut name_bytes = Vec::with_capacity(name_length);
+        for _ in 0..((name_length + 7) / 8) {
+            let chunk = *u64data.next().unwrap();
+            name_bytes.extend_from_slice(&chunk.to_le_bytes());
+        }
+        name_bytes.truncate(name_length); // 截断多余的填充值
+        let name = String::from_utf8(name_bytes).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+
         let health = *u64data.next().unwrap(); // 健康度
         let satiety = *u64data.next().unwrap(); // 饱腹度
         let exp = *u64data.next().unwrap(); // 经验值
@@ -57,17 +66,14 @@ impl StorageData for Elf {
         let current_gold_produce = *u64data.next().unwrap(); // 当前金币产出基础值
         let elf_type = *u64data.next().unwrap(); // 精灵类型
 
-        // 假设名字长度不超过 8 字节,可以直接从字节数组构造字符串
-        let name = match String::from_utf8(name_bytes.to_vec()) {
-            Ok(s) => Box::leak(s.into_boxed_str()), // 将 String 转换为 'static str
-            Err(_) => "",
-        };
+
+
 
 
         // 返回一个 Elf 实例
         Elf {
             id,
-            name,
+            name: Box::leak(name.into_boxed_str()),
             health,
             satiety,
             exp,
@@ -81,10 +87,21 @@ impl StorageData for Elf {
     fn to_data(&self, data: &mut Vec<u64>) {
         data.push(self.id); // 将 id 推入 `data`
 
-        // 假设 `name` 是 UTF-8 字符串,转为字节数组并存储
+        // 假设 `name` 是 UTF-8 字符串，存储其长度和字节数据
         let name_bytes = self.name.as_bytes();
-        let name_u64 = u64::from_le_bytes(name_bytes.try_into().unwrap_or([0; 8])); // 转换为 u64 格式
-        data.push(name_u64);
+        data.push(name_bytes.len() as u64); // 推入 name 长度
+        for chunk in name_bytes.chunks(8) {
+            let padded_chunk: [u8; 8] = chunk
+                .iter()
+                .copied()
+                .chain(std::iter::repeat(0)) // 填充为 8 字节
+                .take(8)
+                .collect::<Vec<u8>>()
+                .try_into()
+                .unwrap();
+            data.push(u64::from_le_bytes(padded_chunk)); // 转为 u64 存储
+        }
+
 
         data.push(self.health); // 健康度
         data.push(self.satiety); // 饱腹度

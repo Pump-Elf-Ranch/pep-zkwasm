@@ -12,7 +12,7 @@ use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
 use zkwasm_rust_sdk::require;
-
+use crate::elf::Elf;
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -83,7 +83,9 @@ impl Transaction {
         match player {
             Some(_) => Err(ERROR_PLAYER_ALREADY_EXIST),
             None => {
-                let player = ElfPlayer::new_from_pid(*pid);
+                let mut player = ElfPlayer::new_from_pid(*pid);
+                let elf = Elf::new(1, "test", 1, 1, 11, 1, 1);
+                player.data.elfs.push(elf);
                 player.store();
                 Ok(())
             }
