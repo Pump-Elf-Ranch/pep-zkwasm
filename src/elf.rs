@@ -66,10 +66,6 @@ impl StorageData for Elf {
         let current_gold_produce = *u64data.next().unwrap(); // 当前金币产出基础值
         let elf_type = *u64data.next().unwrap(); // 精灵类型
 
-
-
-
-
         // 返回一个 Elf 实例
         Elf {
             id,

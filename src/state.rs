@@ -33,6 +33,7 @@ fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S
     }
 */
 
+
 pub struct Transaction {
     pub command: u64,
     pub objindex: usize,
@@ -107,27 +108,8 @@ impl Transaction {
     }
 
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
+        zkwasm_rust_sdk::dbg!("rand {:?}\n", {rand});
         let b = match self.command {
-            TIME_TICK => {
-                zkwasm_rust_sdk::dbg!("TIME_TICK \n");
-
-                let state = unsafe { &mut STATE };
-                state.counter += 1;
-                let rand = self.data[0];
-                zkwasm_rust_sdk::dbg!("new rand is {:?}\n", { self.data[1] });
-                zkwasm_rust_sdk::dbg!("new rand bytes {:?}\n", { rand.to_le_bytes() });
-                let mut hasher = HASHER.clone();
-                hasher.update(rand.to_le_bytes());
-                let v = hasher.finalize();
-                let checkseed = u64::from_be_bytes(v[24..32].try_into().unwrap());
-                zkwasm_rust_sdk::dbg!("v is {:?}\n", checkseed);
-                if state.rand_commitment != 0 {
-                    unsafe { zkwasm_rust_sdk::require(state.rand_commitment == checkseed) };
-                }
-                state.rand_commitment = self.data[1];
-                unsafe { STATE.settle(rand) };
-                0
-            }
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
@@ -144,31 +126,26 @@ impl Transaction {
 pub struct SafeState(RefCell<State>);
 unsafe impl Sync for SafeState {}
 
-// lazy_static::lazy_static! {
-//     pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
-// }
-
-pub static mut STATE: State = State {
-    rand_commitment: 0,
-    counter: 0,
-};
-
-#[derive(Serialize)]
-pub struct State {
-    rand_commitment: u64,
-    counter: u64,
+lazy_static::lazy_static! {
+    pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
 }
+
+pub struct State {
+    supplier: u64,
+    queue: EventQueue<Event>,
+}
+
 
 impl State {
     pub fn new() -> Self {
         State {
-            rand_commitment: 0,
-            counter: 0,
+            supplier: 1000,
+            queue: EventQueue::new(),
         }
     }
     pub fn snapshot() -> String {
-        let state = unsafe { &STATE };
-        serde_json::to_string(&state).unwrap()
+        let counter = STATE.0.borrow().queue.counter;
+        serde_json::to_string(&counter).unwrap()
     }
     pub fn get_state(pid: Vec<u64>) -> String {
         let player = ElfPlayer::get(&pid.try_into().unwrap()).unwrap();
@@ -176,11 +153,11 @@ impl State {
     }
 
     pub fn preempt() -> bool {
-        let state = unsafe { &STATE };
-        if state.counter % 100 == 0 {
-            return true;
+        let counter = STATE.0.borrow().queue.counter;
+        if counter % 30 == 0 {
+            true
         } else {
-            return false;
+            false
         }
     }
 
@@ -189,7 +166,7 @@ impl State {
     }
 
     pub fn rand_seed() -> u64 {
-        unsafe { STATE.rand_commitment }
+        0
     }
     pub fn settle(&mut self, rand: u64) {
         // for game in self.games.iter_mut() {
@@ -200,21 +177,24 @@ impl State {
     }
 
     pub fn store() {
-        let state = unsafe { &STATE };
-        let mut v = Vec::with_capacity(2);
-        v.push(state.rand_commitment);
-        v.push(state.counter);
+        let mut state = STATE.0.borrow_mut();
+        let mut v = Vec::with_capacity(state.queue.list.len() + 10);
+        v.push(state.supplier);
+        state.queue.to_data(&mut v);
         let kvpair = unsafe { &mut MERKLE_MAP };
         kvpair.set(&[0, 0, 0, 0], v.as_slice());
+        state.queue.store();
+        let root = kvpair.merkle.root.clone();
+        zkwasm_rust_sdk::dbg!("root after store: {:?}\n", root);
     }
     pub fn initialize() {
-        let state = unsafe { &mut STATE };
+        let mut state = STATE.0.borrow_mut();
         let kvpair = unsafe { &mut MERKLE_MAP };
         let mut data = kvpair.get(&[0, 0, 0, 0]);
         if !data.is_empty() {
             let mut data = data.iter_mut();
-            state.rand_commitment = *data.next().unwrap();
-            state.counter = *data.next().unwrap();
+            state.supplier = *data.next().unwrap();
+            state.queue = EventQueue::from_data(&mut data);
         }
     }
 }

@@ -9,10 +9,10 @@ use crate::ranch::Ranch;
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
-    pub gold_count: u32, // 累计金币数量
-    pub clean_count: u32, // 累计清洁次数
-    pub feed_count: u32, // 累计喂食次数
-    pub gold_balance: u32, // 金币余额
+    pub gold_count: u64, // 累计金币数量
+    pub clean_count: u64, // 累计清洁次数
+    pub feed_count: u64, // 累计喂食次数
+    pub gold_balance: u64, // 金币余额
     pub props: Vec<Prop>, // 拥有的道具
     pub ranchs:Vec<Ranch>, // 拥有的牧场
 }
@@ -38,10 +38,10 @@ impl PlayerData {
 impl StorageData for PlayerData {
     fn from_data(u64data: &mut IterMut<u64>) -> Self {
         // 读取基础数据
-        let gold_count = *u64data.next().unwrap() as u32;
-        let clean_count = *u64data.next().unwrap() as u32;
-        let feed_count = *u64data.next().unwrap() as u32;
-        let gold_balance = *u64data.next().unwrap() as u32;
+        let gold_count = *u64data.next().unwrap();
+        let clean_count = *u64data.next().unwrap();
+        let feed_count = *u64data.next().unwrap();
+        let gold_balance = *u64data.next().unwrap();
 
         // 读取道具数据
         let props_count = *u64data.next().unwrap() as usize; // 读取道具数量
@@ -71,10 +71,10 @@ impl StorageData for PlayerData {
 
     fn to_data(&self, data: &mut Vec<u64>) {
         // 将基础数据推入数据流
-        data.push(self.gold_count as u64);
-        data.push(self.clean_count as u64);
-        data.push(self.feed_count as u64);
-        data.push(self.gold_balance as u64);
+        data.push(self.gold_count);
+        data.push(self.clean_count);
+        data.push(self.feed_count);
+        data.push(self.gold_balance);
 
         // 将道具数据推入数据流
         data.push(self.props.len() as u64); // 先推入道具数量
