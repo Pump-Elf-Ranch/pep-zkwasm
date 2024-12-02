@@ -5,14 +5,20 @@ use crate::events::Event;
 use crate::object::Object;
 use crate::player::ElfPlayer;
 use crate::player::Owner;
+use sha2::Digest;
+use sha2::Sha256;
 use std::cell::RefCell;
+
+use crate::elf::Elf;
+use crate::ranch::Ranch;
+use lazy_static::lazy_static;
+use serde::Serialize;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::WithdrawInfo;
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
 use zkwasm_rust_sdk::require;
-use crate::elf::Elf;
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -34,7 +40,7 @@ pub struct Transaction {
     pub data: Vec<u64>,
 }
 
-
+const TIME_TICK: u64 = 0;
 const INIT_PLAYER: u64 = 1; // 新用户
 const BUY_ELF: u64 = 2; // 购买精灵
 const FEED_ELF: u64 = 3; // 喂食精灵
@@ -46,6 +52,9 @@ const WITHDRAW: u64 = 7; // 充值
 const DEPOSIT: u64 = 8; // 提现
 const BOUNTY: u64 = 9;
 
+lazy_static! {
+    static ref HASHER: Sha256 = Sha256::new();
+}
 impl Transaction {
     pub fn decode_error(e: u32) -> &'static str {
         match e {
@@ -66,9 +75,10 @@ impl Transaction {
             data = vec![params[1], params[2], params[3]] // address of withdraw(Note:amount in params[1])
         } else if command == DEPOSIT {
             data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], amount
-        }
-         else if command == BOUNTY {
+        } else if command == BOUNTY {
             data = vec![params[1]] // pkey[0], pkey[1], amount
+        } else {
+            data = vec![params[1], params[2], params[3]]
         };
 
         Transaction {
@@ -85,32 +95,45 @@ impl Transaction {
             None => {
                 let mut player = ElfPlayer::new_from_pid(*pid);
                 let elf = Elf::new(1, "test", 1, 1, 11, 1, 1);
-                player.data.elfs.push(elf);
+                let ranch_count = player.data.ranchs.len();
+                let ranch_id = ranch_count+1;
+                let mut ranch = Ranch::new(ranch_id as u64);
+                ranch.elfs.push(elf);
+                player.data.ranchs.push(ranch);
                 player.store();
                 Ok(())
             }
         }
     }
 
-
-
-
-
-
-
-
-
-
-
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
         let b = match self.command {
+            TIME_TICK => {
+                zkwasm_rust_sdk::dbg!("TIME_TICK \n");
+
+                let state = unsafe { &mut STATE };
+                state.counter += 1;
+                let rand = self.data[0];
+                zkwasm_rust_sdk::dbg!("new rand is {:?}\n", { self.data[1] });
+                zkwasm_rust_sdk::dbg!("new rand bytes {:?}\n", { rand.to_le_bytes() });
+                let mut hasher = HASHER.clone();
+                hasher.update(rand.to_le_bytes());
+                let v = hasher.finalize();
+                let checkseed = u64::from_be_bytes(v[24..32].try_into().unwrap());
+                zkwasm_rust_sdk::dbg!("v is {:?}\n", checkseed);
+                if state.rand_commitment != 0 {
+                    unsafe { zkwasm_rust_sdk::require(state.rand_commitment == checkseed) };
+                }
+                state.rand_commitment = self.data[1];
+                unsafe { STATE.settle(rand) };
+                0
+            }
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
-                STATE.0.borrow_mut().queue.tick();
                 0
             }
         };
@@ -121,25 +144,31 @@ impl Transaction {
 pub struct SafeState(RefCell<State>);
 unsafe impl Sync for SafeState {}
 
-lazy_static::lazy_static! {
-    pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
-}
+// lazy_static::lazy_static! {
+//     pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
+// }
 
+pub static mut STATE: State = State {
+    rand_commitment: 0,
+    counter: 0,
+};
+
+#[derive(Serialize)]
 pub struct State {
-    supplier: u64,
-    queue: EventQueue<Event>,
+    rand_commitment: u64,
+    counter: u64,
 }
 
 impl State {
     pub fn new() -> Self {
         State {
-            supplier: 1000,
-            queue: EventQueue::new(),
+            rand_commitment: 0,
+            counter: 0,
         }
     }
     pub fn snapshot() -> String {
-        let counter = STATE.0.borrow().queue.counter;
-        serde_json::to_string(&counter).unwrap()
+        let state = unsafe { &STATE };
+        serde_json::to_string(&state).unwrap()
     }
     pub fn get_state(pid: Vec<u64>) -> String {
         let player = ElfPlayer::get(&pid.try_into().unwrap()).unwrap();
@@ -147,11 +176,11 @@ impl State {
     }
 
     pub fn preempt() -> bool {
-        let counter = STATE.0.borrow().queue.counter;
-        if counter % 30 == 0 {
-            true
+        let state = unsafe { &STATE };
+        if state.counter % 100 == 0 {
+            return true;
         } else {
-            false
+            return false;
         }
     }
 
@@ -160,28 +189,32 @@ impl State {
     }
 
     pub fn rand_seed() -> u64 {
-        0
+        unsafe { STATE.rand_commitment }
+    }
+    pub fn settle(&mut self, rand: u64) {
+        // for game in self.games.iter_mut() {
+        //     let final_rand = game.rand ^ rand;
+        //     game.settle(final_rand);
+        // }
+        // self.games = vec![];
     }
 
     pub fn store() {
-        let mut state = STATE.0.borrow_mut();
-        let mut v = Vec::with_capacity(state.queue.list.len() + 10);
-        v.push(state.supplier);
-        state.queue.to_data(&mut v);
+        let state = unsafe { &STATE };
+        let mut v = Vec::with_capacity(2);
+        v.push(state.rand_commitment);
+        v.push(state.counter);
         let kvpair = unsafe { &mut MERKLE_MAP };
         kvpair.set(&[0, 0, 0, 0], v.as_slice());
-        state.queue.store();
-        let root = kvpair.merkle.root.clone();
-        zkwasm_rust_sdk::dbg!("root after store: {:?}\n", root);
     }
     pub fn initialize() {
-        let mut state = STATE.0.borrow_mut();
+        let state = unsafe { &mut STATE };
         let kvpair = unsafe { &mut MERKLE_MAP };
         let mut data = kvpair.get(&[0, 0, 0, 0]);
         if !data.is_empty() {
             let mut data = data.iter_mut();
-            state.supplier = *data.next().unwrap();
-            state.queue = EventQueue::from_data(&mut data);
+            state.rand_commitment = *data.next().unwrap();
+            state.counter = *data.next().unwrap();
         }
     }
 }

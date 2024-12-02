@@ -9,6 +9,7 @@ pub mod object;
 pub mod player;
 pub mod state;
 mod prop;
+mod ranch;
 
 use crate::config::Config;
 use crate::state::{State, Transaction};

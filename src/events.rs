@@ -6,7 +6,8 @@ use zkwasm_rest_convention::EventHandler;
 #[derive(Clone)]
 pub struct Event {
     pub owner: [u64; 2],
-    pub object_index: usize,
+    pub ranch_index: usize,
+    pub elf_index: usize,
     pub delta: usize,
 }
 
@@ -14,15 +15,20 @@ impl StorageData for Event {
     fn to_data(&self, buf: &mut Vec<u64>) {
         buf.push(self.owner[0]);
         buf.push(self.owner[1]);
-        buf.push(((self.object_index as u64) << 32) | self.delta as u64);
+        buf.push(self.ranch_index as u64);
+        buf.push(self.elf_index as u64);
+        buf.push(self.delta as u64);
     }
     fn from_data(u64data: &mut IterMut<u64>) -> Event {
         let owner = [*u64data.next().unwrap(), *u64data.next().unwrap()];
-        let f = *u64data.next().unwrap();
+        let ranch_index = *u64data.next().unwrap();
+        let elf_index = *u64data.next().unwrap();
+        let delta = *u64data.next().unwrap();
         Event {
             owner,
-            object_index: (f >> 32) as usize,
-            delta: (f & 0xffffffff) as usize,
+            ranch_index: ranch_index as usize,
+            elf_index: elf_index as usize,
+            delta: delta as usize,
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::MERKLE_MAP;
 use serde::Serialize;
 use std::slice::IterMut;
 use crate::prop::Prop;
-
+use crate::ranch::Ranch;
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
@@ -13,9 +13,8 @@ pub struct PlayerData {
     pub clean_count: u32, // 累计清洁次数
     pub feed_count: u32, // 累计喂食次数
     pub gold_balance: u32, // 金币余额
-    pub ranch_clean: u16, // 牧场清洁度
-    pub elfs: Vec<Elf>, // 拥有的精灵
     pub props: Vec<Prop>, // 拥有的道具
+    pub ranchs:Vec<Ranch>, // 拥有的牧场
 }
 
 impl Default for PlayerData {
@@ -25,32 +24,14 @@ impl Default for PlayerData {
             clean_count: 0,
             feed_count: 0,
             gold_balance: 120, // 新用户默认给120个金币
-            ranch_clean: 0,
-            elfs: vec![],
             props: vec![],
+            ranchs: vec![],
         }
     }
 }
 
 
 impl PlayerData {
-
-    // 清理牧场
-    pub fn clean_ranch(&mut self) {
-        if self.ranch_clean >0 {
-            self.ranch_clean = 0;
-            self.clean_count += 1;
-        }
-    }
-
-    pub fn feed_elf(&mut self, index: usize) {
-        for elf in &mut self.elfs {
-            // 在这里处理每个精灵，例如打印其信息或调用其方法
-            println!("{:?}", elf);
-        }
-        self.feed_count += 1;
-    }
-
 
 }
 
@@ -61,15 +42,6 @@ impl StorageData for PlayerData {
         let clean_count = *u64data.next().unwrap() as u32;
         let feed_count = *u64data.next().unwrap() as u32;
         let gold_balance = *u64data.next().unwrap() as u32;
-        let ranch_clean = *u64data.next().unwrap() as u16;
-
-        // 读取精灵数据
-        let elfs_count = *u64data.next().unwrap() as usize; // 读取精灵数量
-        let mut elfs = Vec::with_capacity(elfs_count);
-        for _ in 0..elfs_count {
-            let elf = Elf::from_data(u64data); // 使用 Elf 的 from_data 方法解析每个精灵
-            elfs.push(elf);
-        }
 
         // 读取道具数据
         let props_count = *u64data.next().unwrap() as usize; // 读取道具数量
@@ -79,14 +51,21 @@ impl StorageData for PlayerData {
             props.push(prop);
         }
 
+        // 读取牧场的数据
+        let ranchs_count = *u64data.next().unwrap() as usize; // 读取道具数量
+        let mut ranchs = Vec::with_capacity(ranchs_count);
+        for _ in 0..ranchs_count {
+            let ranch = Ranch::from_data(u64data); // 假设 Prop 类型也有 from_data 方法
+            ranchs.push(ranch);
+        }
+
         PlayerData {
             gold_count,
             clean_count,
             feed_count,
             gold_balance,
-            ranch_clean,
-            elfs,
             props,
+            ranchs,
         }
     }
 
@@ -96,18 +75,17 @@ impl StorageData for PlayerData {
         data.push(self.clean_count as u64);
         data.push(self.feed_count as u64);
         data.push(self.gold_balance as u64);
-        data.push(self.ranch_clean as u64);
-
-        // 将精灵数据推入数据流
-        data.push(self.elfs.len() as u64); // 先推入精灵数量
-        for elf in &self.elfs {
-            elf.to_data(data); // 使用 Elf 的 to_data 方法将每个精灵转回数据
-        }
 
         // 将道具数据推入数据流
         data.push(self.props.len() as u64); // 先推入道具数量
         for prop in &self.props {
             prop.to_data(data); // 使用 Prop 的 to_data 方法将每个道具转回数据
+        }
+
+        // 将牧场数据推入数据流
+        data.push(self.ranchs.len() as u64); // 先推入牧场数量
+        for ranch in &self.ranchs {
+            ranch.to_data(data); // 使用 Ranch 的 to_data 方法将每个牧场转回数据
         }
     }
 
