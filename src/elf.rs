@@ -2,7 +2,9 @@ use serde::Serialize;
 use std::slice::IterMut;
 use zkwasm_rest_abi::StorageData;
 use lazy_static::lazy_static;
-use std::str; // 导入 std::str 模块
+use std::str;
+use zkwasm_rust_sdk::PoseidonHasher;
+// 导入 std::str 模块
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Elf {
@@ -107,6 +109,13 @@ impl StorageData for Elf {
         data.push(self.max_gold_store); // 最大金币存储量
         data.push(self.current_gold_produce); // 当前金币产出基础值
         data.push(self.elf_type); // 精灵类型
+    }
+
+    fn buy_elf(rand: u64) -> Elf {
+        let mut elf = Elf::new(0, "Elf", 0, 0, 0, 0, 0);
+        elf.id = rand;
+        elf
+
     }
 }
 

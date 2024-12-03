@@ -1,5 +1,6 @@
 use crate::elf::Elf;
 use serde::Serialize;
+use zkwasm_rust_sdk::PoseidonHasher;
 
 pub const ENTITY_ATTRIBUTES_SIZE: usize = 4; //level speed efficiency productivity
 pub const LOCAL_ATTRIBUTES_SIZE: usize = 8;
@@ -41,6 +42,17 @@ pub fn default_entities(index: usize) -> [i64; ENTITY_ATTRIBUTES_SIZE] {
 
 pub fn default_local() -> [i64; LOCAL_ATTRIBUTES_SIZE] {
     [30, 30, 0, 0, 2, 0, 0, 0]
+}
+
+// 生成介于 1 和 n 之间的随机数
+pub fn get_random(random_seed: u64, num: u64) -> u64 {
+    let mut hasher = PoseidonHasher::new();
+    hasher.update(random_seed);
+    let result = hasher.finalize();
+    let random_hash_integer = result[0] ^ result[1] ^ result[2] ^ result[3];
+    let random_number = (random_hash_integer % num) + 1;
+    zkwasm_rust_sdk::dbg!("====== random_number is {:?} \n", random_number);
+    random_number
 }
 
 const LOCAL_RESOURCE_WEIGHT: [u64; LOCAL_ATTRIBUTES_SIZE] = [1, 1, 2, 4, 8, 16, 32, 128];

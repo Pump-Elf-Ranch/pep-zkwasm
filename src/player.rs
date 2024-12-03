@@ -112,7 +112,7 @@ impl Owner for ElfPlayer {
         Self::new_from_pid(Self::pkey_to_pid(pkey))
     }
 
-    fn get(pkey: &[u64; 4]) -> Option<Self> {
+    fn get(pkey: &[u64; 2]) -> Option<Self> {
         Self::get_from_pid(&Self::pkey_to_pid(pkey))
     }
 }

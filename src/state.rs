@@ -52,10 +52,9 @@ const SELL_ELF: u64 = 6; // 卖出精灵
 const WITHDRAW: u64 = 7; // 充值
 const DEPOSIT: u64 = 8; // 提现
 const BOUNTY: u64 = 9;
+const BUY_RANCH: u64 = 10;
 
-lazy_static! {
-    static ref HASHER: Sha256 = Sha256::new();
-}
+
 impl Transaction {
     pub fn decode_error(e: u32) -> &'static str {
         match e {
@@ -95,16 +94,24 @@ impl Transaction {
             Some(_) => Err(ERROR_PLAYER_ALREADY_EXIST),
             None => {
                 let mut player = ElfPlayer::new_from_pid(*pid);
-                let elf = Elf::new(1, "test", 1, 1, 11, 1, 1);
+                // 初始化一个牧场给用户
                 let ranch_count = player.data.ranchs.len();
                 let ranch_id = ranch_count+1;
-                let mut ranch = Ranch::new(ranch_id as u64);
-                ranch.elfs.push(elf);
+                let ranch = Ranch::new(ranch_id as u64);
                 player.data.ranchs.push(ranch);
                 player.store();
                 Ok(())
             }
         }
+    }
+
+    pub fn buy_elf(&self, pid: &[u64; 2],rand: u64) -> Result<(), u32> {
+        let mut state = STATE.0.borrow_mut();
+        let player = ElfPlayer::get(pid).unwrap();
+
+        player.data.ranchs[0].push();
+        player.store();
+        Ok(())
     }
 
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
@@ -116,6 +123,7 @@ impl Transaction {
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
+                STATE.0.borrow_mut().queue.tick();
                 0
             }
         };
