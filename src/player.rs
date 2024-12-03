@@ -93,26 +93,3 @@ impl StorageData for PlayerData {
 
 pub type ElfPlayer = Player<PlayerData>;
 
-pub trait Owner: Sized {
-    fn store(&self);
-    fn new(pkey: &[u64; 4]) -> Self;
-    fn get(pkey: &[u64; 4]) -> Option<Self>;
-}
-
-impl Owner for ElfPlayer {
-    fn store(&self) {
-        zkwasm_rust_sdk::dbg!("store player\n");
-        let mut data = Vec::new();
-        self.data.to_data(&mut data);
-        let kvpair = unsafe { &mut MERKLE_MAP };
-        kvpair.set(&Self::to_key(&self.player_id), data.as_slice());
-        zkwasm_rust_sdk::dbg!("end store player\n");
-    }
-    fn new(pkey: &[u64; 4]) -> Self {
-        Self::new_from_pid(Self::pkey_to_pid(pkey))
-    }
-
-    fn get(pkey: &[u64; 2]) -> Option<Self> {
-        Self::get_from_pid(&Self::pkey_to_pid(pkey))
-    }
-}

@@ -1,23 +1,25 @@
+use crate::config::get_random;
+use lazy_static::lazy_static;
 use serde::Serialize;
 use std::slice::IterMut;
-use zkwasm_rest_abi::StorageData;
-use lazy_static::lazy_static;
 use std::str;
+use zkwasm_rest_abi::StorageData;
 use zkwasm_rust_sdk::PoseidonHasher;
 // 导入 std::str 模块
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Elf {
-    pub id: u64, // 精灵id
-    pub name: &'static str, // 精灵名字
-    pub health: u64, // 健康度
-    pub satiety: u64, // 饱腹度
-    pub exp: u64, // 经验值
-    pub growth_time: u64, // 成长时间
-    pub grade: u64, // 品质等级
-    pub max_gold_store: u64, // 最大金币存储量
-    pub current_gold_produce: u64, // 当前金币产出基础值
-    pub elf_type: u64, // 精灵类型
+    pub id: u64,                   // 精灵id
+    pub name: &'static str,        // 精灵名字
+    pub health: u64,               // 健康度
+    pub satiety: u64,              // 饱腹度
+    pub exp: u64,                  // 经验值
+    pub growth_time: u64,          // 成长时间
+    pub grade: u64,                // 品质等级
+    pub max_gold_store: u64,       // 最大金币存储量
+    pub current_gold_store: u64, // 当前储存的金币数量
+    pub current_gold_produce_base: u64, // 当前金币产出基础值
+    pub elf_type: u64,             // 精灵类型
 }
 
 impl Elf {
@@ -27,7 +29,7 @@ impl Elf {
         growth_time: u64,
         grade: u64,
         max_gold_store: u64,
-        current_gold_produce: u64,
+        current_gold_produce_base: u64,
         elf_type: u64,
     ) -> Self {
         Self {
@@ -39,9 +41,54 @@ impl Elf {
             growth_time,
             grade,
             max_gold_store,
-            current_gold_produce,
+            current_gold_store:0,
+            current_gold_produce_base,
             elf_type,
         }
+    }
+
+    // 获取精灵
+    pub(crate) fn get_elf(rand: u64, elf_type: u64, elf_id: u64) -> Elf {
+        // 获取随机数，得到精灵品质区间获得等级
+        let random = get_random(rand, 100);
+        let grade = Elf::get_grade_by_random(random);
+        let elf_new_id = elf_id + 1;
+        Elf::get_elf_by_type_and_grade(elf_type, elf_new_id, grade)
+    }
+
+    // 根据精灵类型和等级获取精灵
+    fn get_elf_by_type_and_grade(elf_type: u64, grade: u64, elf_id: u64) -> Elf {
+        // 过滤出符合 elf_type 和 grade 的精灵
+        let filtered_elfs: Vec<&StandElf> = DEFAULT_STAND_ELF
+            .iter()
+            .filter(|elf| elf.elf_type == elf_type && elf.grade == grade)
+            .collect();
+
+        let stand_elf = filtered_elfs[0].clone();
+
+        let max_gold_store = stand_elf.max_gold_store_base * stand_elf.current_gold_produce_base;
+        // 创建并返回对应的 Elf 对象
+        Elf::new(
+            elf_id,
+            stand_elf.name,
+            stand_elf.growth_time,
+            grade,
+            max_gold_store,
+            stand_elf.current_gold_produce_base,
+            elf_type,
+        )
+    }
+
+    // 获取等级
+    fn get_grade_by_random(random_num: u64) -> u64 {
+        // 遍历每个精灵等级区间
+        for grade_range in  &*DEFAULT_STAND_ELF_RANDOM {
+            // 判断随机数是否在当前区间内
+            if random_num >= grade_range.start && random_num <= grade_range.end {
+                return grade_range.grade; // 如果在区间内，返回等级
+            }
+        }
+        0 // 如果随机数不在任何区间内，返回 None
     }
 }
 
@@ -49,7 +96,7 @@ impl StorageData for Elf {
     fn from_data(u64data: &mut IterMut<u64>) -> Self {
         // 从数据流中提取每个字段
         let id = *u64data.next().unwrap(); // 精灵id
-        // 读取 name 长度和字节数据
+                                           // 读取 name 长度和字节数据
         let name_length = *u64data.next().unwrap() as usize;
         let mut name_bytes = Vec::with_capacity(name_length);
         for _ in 0..((name_length + 7) / 8) {
@@ -65,7 +112,8 @@ impl StorageData for Elf {
         let growth_time = *u64data.next().unwrap(); // 成长时间
         let grade = *u64data.next().unwrap(); // 品质等级
         let max_gold_store = *u64data.next().unwrap(); // 最大金币存储量
-        let current_gold_produce = *u64data.next().unwrap(); // 当前金币产出基础值
+        let current_gold_store = *u64data.next().unwrap(); // 当前精灵储存的金币
+        let current_gold_produce_base = *u64data.next().unwrap(); // 当前金币产出基础值
         let elf_type = *u64data.next().unwrap(); // 精灵类型
 
         // 返回一个 Elf 实例
@@ -78,7 +126,8 @@ impl StorageData for Elf {
             growth_time,
             grade,
             max_gold_store,
-            current_gold_produce,
+            current_gold_store,
+            current_gold_produce_base,
             elf_type,
         }
     }
@@ -100,39 +149,30 @@ impl StorageData for Elf {
             data.push(u64::from_le_bytes(padded_chunk)); // 转为 u64 存储
         }
 
-
         data.push(self.health); // 健康度
         data.push(self.satiety); // 饱腹度
         data.push(self.exp); // 经验值
         data.push(self.growth_time); // 成长时间
         data.push(self.grade); // 品质等级
         data.push(self.max_gold_store); // 最大金币存储量
-        data.push(self.current_gold_produce); // 当前金币产出基础值
+        data.push(self.current_gold_store); // 当前金币存储量
+        data.push(self.current_gold_produce_base); // 当前金币产出基础值
         data.push(self.elf_type); // 精灵类型
     }
-
-    fn buy_elf(rand: u64) -> Elf {
-        let mut elf = Elf::new(0, "Elf", 0, 0, 0, 0, 0);
-        elf.id = rand;
-        elf
-
-    }
 }
-
 
 // 平台精灵参数
 #[derive(Clone, Debug, Serialize)]
 pub struct StandElf {
-    pub id: u64, // 精灵id
-    pub name: &'static str, // 精灵名字
-    pub buy_price: u64, // 购买价格
-    pub growth_time: u64, // 成长时间
-    pub max_gold_store: u64, // 最大金币存储量
-    pub current_gold_produce: u64, // 当前金币产出基础值
-    pub elf_type: u64, // 精灵类型
-    pub grade: u64, // 品质等级
-    pub sell_price: u64, // 出售价格
-
+    pub id: u64,                   // 精灵id
+    pub name: &'static str,        // 精灵名字
+    pub buy_price: u64,            // 购买价格
+    pub growth_time: u64,          // 成长时间
+    pub max_gold_store_base: u64,       // 最大金币存储量基数
+    pub current_gold_produce_base: u64, // 当前金币产出基础值
+    pub elf_type: u64,             // 精灵类型
+    pub grade: u64,                // 品质等级
+    pub sell_price: u64,           // 出售价格
 }
 
 impl StandElf {
@@ -141,8 +181,8 @@ impl StandElf {
         name: &'static str,
         buy_price: u64,
         growth_time: u64,
-        max_gold_store: u64,
-        current_gold_produce: u64,
+        max_gold_store_base: u64,
+        current_gold_produce_base: u64,
         elf_type: u64,
         grade: u64,
         sell_price: u64,
@@ -152,11 +192,11 @@ impl StandElf {
             name,
             buy_price,
             growth_time,
-            max_gold_store,
-            current_gold_produce,
+            max_gold_store_base,
+            current_gold_produce_base,
             elf_type,
             grade,
-            sell_price
+            sell_price,
         }
     }
 }
@@ -166,15 +206,11 @@ impl StandElf {
 pub struct ElfGradeRandom {
     pub grade: u64, // 品质等级
     pub start: u64, // 开始区间
-    pub end: u64, // 结束区间
+    pub end: u64,   // 结束区间
 }
 impl ElfGradeRandom {
     pub fn new(grade: u64, start: u64, end: u64) -> Self {
-        Self {
-            grade,
-            start,
-            end,
-        }
+        Self { grade, start, end }
     }
 }
 

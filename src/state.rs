@@ -1,24 +1,17 @@
 use crate::config::ADMIN_PUBKEY;
-use crate::config::CONFIG;
 use crate::error::*;
 use crate::events::Event;
-use crate::object::Object;
 use crate::player::ElfPlayer;
-use crate::player::Owner;
 use sha2::Digest;
-use sha2::Sha256;
 use std::cell::RefCell;
 
 use crate::elf::Elf;
 use crate::ranch::Ranch;
 use lazy_static::lazy_static;
-use serde::Serialize;
 use zkwasm_rest_abi::StorageData;
-use zkwasm_rest_abi::WithdrawInfo;
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
-use zkwasm_rust_sdk::require;
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -107,19 +100,43 @@ impl Transaction {
 
     pub fn buy_elf(&self, pid: &[u64; 2],rand: u64) -> Result<(), u32> {
         let mut state = STATE.0.borrow_mut();
-        let player = ElfPlayer::get(pid).unwrap();
+        let mut player = ElfPlayer::get_from_pid(pid).unwrap();
+        // 获取牧场索引
+        let ranch_index = self.data[0];
+        if ranch_index  > (player.data.ranchs.len() - 1) as u64 {
+            return Err(ERROR_INDEX_OUT_OF_BOUND);
+        }
+        // todo 判断金额是否够，根据类型判断是否符合购买条件，
+        // todo 减少用户的金额
+        // 获取当前牧场的宠物数量
+        let elfs_count = player.data.ranchs[ranch_index as usize].elfs.len() as u64;
+        let elf_type = self.data[1];
+        // 保存新宠物到牧场
+        let new_elf = Elf::get_elf(rand,elf_type,elfs_count);
 
-        player.data.ranchs[0].push();
+        player.data.ranchs[ranch_index as usize].elfs.push(new_elf);
         player.store();
+        state.queue.insert(Event {
+            owner: *pid,
+            event_type: 1,
+            ranch_index: 0,
+            elf_index: 0,
+            delta: (60/5) as usize,
+        });
+        // todo 增加队列，宠物健康消耗，宠物饱食度消耗，经验成长，金币增长，便便产生（3分钟一坨，牧场最多10坨，满了10坨不再产生）
         Ok(())
     }
 
-    pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> u32 {
-        zkwasm_rust_sdk::dbg!("rand {:?}\n", {rand});
+    pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
+        zkwasm_rust_sdk::dbg!("rand {:?}\n", {sigr});
+        let rand =sigr[0] ^ sigr[1] ^ sigr[2] ^ sigr[3];
         let b = match self.command {
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
+            BUY_ELF =>
+                 self.buy_elf(&ElfPlayer::pkey_to_pid(&pkey), rand)
+                    .map_or_else(|e| e, |_| 0),
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
@@ -155,8 +172,8 @@ impl State {
         let counter = STATE.0.borrow().queue.counter;
         serde_json::to_string(&counter).unwrap()
     }
-    pub fn get_state(pid: Vec<u64>) -> String {
-        let player = ElfPlayer::get(&pid.try_into().unwrap()).unwrap();
+    pub fn get_state(pkey: Vec<u64>) -> String {
+        let player = ElfPlayer::get_from_pid(&ElfPlayer::pkey_to_pid(&pkey.try_into().unwrap()));
         serde_json::to_string(&player).unwrap()
     }
 

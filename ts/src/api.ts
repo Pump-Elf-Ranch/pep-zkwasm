@@ -27,7 +27,7 @@ function addrToParams(bn: BN): Array<bigint> {
 }
 
 const CMD_INSTALL_PLAYER = 1n;
-const CMD_INSTALL_OBJECT = 2n;
+const CMD_BUY_ELF = 2n;
 const CMD_RESTART_OBJECT = 3n;
 const CMD_UPGRADE_OBJECT = 4n;
 const CMD_INSTALL_CARD = 5n;
@@ -85,19 +85,20 @@ export class Player {
     }
   }
 
-  async installObject(objid: bigint, modifiers: Array<bigint>) {
+  async buy_elf(objid: bigint, ranch_index: bigint,elf_type:bigint) {
     let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
     try {
       let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_INSTALL_OBJECT, objid), encode_modifier(modifiers), 0n, 0n]),
+        new BigUint64Array([createCommand(nonce, CMD_BUY_ELF, objid), ranch_index, elf_type, 0n]),
         this.processingKey
       );
-      console.log("installObject processed at:", finished);
+      console.log("buy_elf processed at:", finished);
     } catch(e) {
       if(e instanceof Error) {
         console.log(e.message);
       }
-      console.log("installObject error at modifiers:", modifiers, "processing key:", this.processingKey);
+      console.log("buy_elf error at ranch_index:", ranch_index, "elf_type :", elf_type);
     }
   }
 

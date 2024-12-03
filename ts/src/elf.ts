@@ -14,7 +14,7 @@ async function main() {
   await player.deposit();
 
   console.log("install object ...\n");
-  await player.installObject(0n, [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n]);
+  // await player.installObject(0n, [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n]);
 
   console.log("install card...\n");
   await player.installCard();
