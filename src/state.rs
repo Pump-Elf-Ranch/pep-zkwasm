@@ -121,7 +121,7 @@ impl Transaction {
             event_type: 1,
             ranch_index: 0,
             elf_index: 0,
-            delta: (60/5) as usize,
+            delta: 1,
         });
         // todo 增加队列，宠物健康消耗，宠物饱食度消耗，经验成长，金币增长，便便产生（3分钟一坨，牧场最多10坨，满了10坨不再产生）
         Ok(())
@@ -155,6 +155,7 @@ lazy_static::lazy_static! {
     pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
 }
 
+
 pub struct State {
     supplier: u64,
     queue: EventQueue<Event>,
@@ -179,7 +180,7 @@ impl State {
 
     pub fn preempt() -> bool {
         let counter = STATE.0.borrow().queue.counter;
-        if counter % 30 == 0 {
+        if counter % 5 == 0 {
             true
         } else {
             false
@@ -187,7 +188,16 @@ impl State {
     }
 
     pub fn flush_settlement() -> Vec<u8> {
-        SettlementInfo::flush_settlement()
+        // let mut state = STATE.0.borrow_mut();
+        // let counter = state.queue.counter;
+
+        let data = SettlementInfo::flush_settlement();
+        {
+            let mut state = STATE.0.borrow_mut(); // 获取 `State` 的可变引用
+            state.queue.store(); // 调用 `State` 的 `store` 方法
+        }
+        data
+        // state.queue.counter = counter;
     }
 
     pub fn rand_seed() -> u64 {
@@ -203,7 +213,7 @@ impl State {
 
     pub fn store() {
         let mut state = STATE.0.borrow_mut();
-        let mut v = Vec::with_capacity(state.queue.list.len() + 10);
+        let mut v = Vec::with_capacity(state.queue.list.len() + 8);
         v.push(state.supplier);
         state.queue.to_data(&mut v);
         let kvpair = unsafe { &mut MERKLE_MAP };

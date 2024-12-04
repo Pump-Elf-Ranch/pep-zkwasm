@@ -22,7 +22,7 @@
     "typescript": "^5.4.5",
     "zkwasm-service-cli": "git+https://github.com/DelphinusLab/zkWasm-service-cli.git",
     "zkwasm-service-helper": "git+https://github.com/DelphinusLab/zkWasm-service-helper.git",
-    "zkwasm-ts-server": "https://gitpkg.vercel.app/0xOmniField/zkwasm-mini-rollup/ts?main"
+    "zkwasm-ts-server": "https://gitpkg.vercel.app/DelphinusLab/zkwasm-mini-rollup/ts?main"
   },
   "scripts": {
     "build": "npx tsc",

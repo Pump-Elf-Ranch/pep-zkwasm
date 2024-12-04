@@ -54,40 +54,22 @@ impl EventHandler for Event {
         let ranch_index = self.ranch_index;
         let elf_index = self.elf_index;
         let mut player = ElfPlayer::get_from_pid(&owner_id).unwrap();
+        let mut event = None;
         if event_type == 1 {
             zkwasm_rust_sdk::dbg!("add exp 20 \n");
             player.data.ranchs[ranch_index].elfs[elf_index].exp += 20;
-            let delta = self.delta -1;
-            Some(Event {
+            event = Some(Event {
                 owner: owner_id,
                 event_type,
                 ranch_index,
                 elf_index,
-                delta
+                delta:1
                 ,
             });
         }
-        // // let m = if player.data.energy == 0 {
-        // //     player.data.objects.get_mut(object_index).unwrap().halt();
-        // //     None
-        // // } else {
-        // //     player.data.apply_object_card(object_index, counter)
-        // // };
-        // let event = if let Some(delta) = m {
-        //     if player.data.objects[object_index].get_modifier_index() == 0 {
-        //         player.data.energy -= 1;
-        //     }
-        //     Some(Event {
-        //         owner: owner_id,
-        //         object_index,
-        //         delta,
-        //     })
-        // } else {
-        //     None
-        // };
 
         player.store();
         zkwasm_rust_sdk::dbg!("save player \n");
-        None
+        event
     }
 }
