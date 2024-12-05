@@ -230,6 +230,7 @@ impl State {
             let mut data = data.iter_mut();
             state.supplier = *data.next().unwrap();
             state.queue = EventQueue::from_data(&mut data);
+            zkwasm_rust_sdk::dbg!("counter is {}\n", {state.queue.counter});
         }
     }
 }
