@@ -4,6 +4,7 @@ use crate::StorageData;
 use crate::MERKLE_MAP;
 use serde::Serialize;
 use std::slice::IterMut;
+use crate::events::Event;
 use crate::prop::Prop;
 use crate::ranch::Ranch;
 
@@ -29,9 +30,43 @@ impl Default for PlayerData {
         }
     }
 }
+const ADD_EXP: u64 = 1; // 经验值增加
+const ADD_GOLD: u64 = 2; // 金币增加
+const health_reduce: u64 = 3; // 金币增加
+const satiety_reduce: u64 = 4; // 金币增加
+const ADD_SHIT: u64 = 5; // 产生大便
 
 
 impl PlayerData {
+
+    // 收集金币
+    fn collect_gold() ->Option<Event> {
+        None
+    }
+
+    // 宠物增加经验
+    fn elf_add_exp_event() -> Option<Event> {
+        None
+    }
+
+    // 宠物增加金币
+    fn elf_add_gold_event() -> Option<Event> {
+        None
+    }
+
+    // 宠物减少健康事件
+    fn elf_health_reduce_event() -> Option<Event> {
+        None
+    }
+
+    // 宠物减少饱食度事件
+    fn elf_satiety_reduce_event() -> Option<Event> {
+        None
+    }
+
+    fn event_hand (elf_type:u64) -> Option<Event> {
+        None
+    }
 
 }
 
