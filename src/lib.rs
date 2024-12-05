@@ -5,7 +5,6 @@ pub mod elf;
 pub mod config;
 pub mod error;
 pub mod events;
-pub mod object;
 pub mod player;
 pub mod state;
 mod prop;
