@@ -191,12 +191,12 @@ impl State {
         // let mut state = STATE.0.borrow_mut();
         // let counter = state.queue.counter;
 
-        let data = SettlementInfo::flush_settlement();
-        {
-            let mut state = STATE.0.borrow_mut(); // 获取 `State` 的可变引用
-            state.queue.store(); // 调用 `State` 的 `store` 方法
-        }
-        data
+        SettlementInfo::flush_settlement()
+        // {
+        //     let mut state = STATE.0.borrow_mut(); // 获取 `State` 的可变引用
+        //     state.queue.store(); // 调用 `State` 的 `store` 方法
+        // }
+        // data
         // state.queue.counter = counter;
     }
 
