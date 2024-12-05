@@ -39,7 +39,7 @@ impl StorageData for Event {
 
 impl EventHandler for Event {
     fn u64size() -> usize {
-        3
+        6
     }
     fn get_delta(&self) -> usize {
         self.delta
