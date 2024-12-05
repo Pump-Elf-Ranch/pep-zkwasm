@@ -102,29 +102,39 @@ impl Transaction {
         let mut state = STATE.0.borrow_mut();
         let mut player = ElfPlayer::get_from_pid(pid).unwrap();
         // 获取牧场索引
-        let ranch_index = self.data[0];
-        if ranch_index  > (player.data.ranchs.len() - 1) as u64 {
+        let ranch_id = self.data[0];
+        if ranch_id  > (player.data.ranchs.len() - 1) as u64 {
             return Err(ERROR_INDEX_OUT_OF_BOUND);
         }
         // todo 判断金额是否够，根据类型判断是否符合购买条件，
         // todo 减少用户的金额
         // 获取当前牧场的宠物数量
-        let elfs_count = player.data.ranchs[ranch_index as usize].elfs.len() as u64;
+        let elfs_count = player.data.ranchs[ranch_id as usize].elfs.len() as u64;
         let elf_type = self.data[1];
         // 保存新宠物到牧场
         let new_elf = Elf::get_elf(rand,elf_type,elfs_count);
-
-        player.data.ranchs[ranch_index as usize].elfs.push(new_elf);
+        let elf_id = new_elf.id;
+        player.data.ranchs[ranch_id as usize].elfs.push(new_elf);
         player.store();
+        // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
             event_type: 1,
-            ranch_index: 0,
-            elf_index: 0,
+            ranch_id,
+            elf_id,
             delta: 1,
         });
         // todo 增加队列，宠物健康消耗，宠物饱食度消耗，经验成长，金币增长，便便产生（3分钟一坨，牧场最多10坨，满了10坨不再产生）
         Ok(())
+    }
+
+    pub fn init_event( player_id:[u64;2], ranch_id:usize, elf_index:usize){
+        let mut state =  STATE.0.borrow_mut();
+        // state.queue.insert()
+    }
+
+    pub fn init_add_gold_event() {
+
     }
 
     pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {

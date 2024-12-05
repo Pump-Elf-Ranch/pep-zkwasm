@@ -7,6 +7,7 @@ use std::slice::IterMut;
 use crate::events::Event;
 use crate::prop::Prop;
 use crate::ranch::Ranch;
+use crate::state::STATE;
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
@@ -32,40 +33,98 @@ impl Default for PlayerData {
 }
 const ADD_EXP: u64 = 1; // 经验值增加
 const ADD_GOLD: u64 = 2; // 金币增加
-const health_reduce: u64 = 3; // 金币增加
-const satiety_reduce: u64 = 4; // 金币增加
+const HEALTH_REDUCE: u64 = 3; // 健康减少
+const SATIETY_REDUCE: u64 = 4; // 饱食减少
 const ADD_SHIT: u64 = 5; // 产生大便
 
 
 impl PlayerData {
 
+    pub fn get_elf_mut(&mut self, ranch_id: u64, elf_id: u64) -> Option<&mut Elf> {
+        // 在玩家的牧场中查找匹配的牧场
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            // 在该牧场的精灵列表中查找指定的精灵并返回可变引用
+            return ranch.elfs.iter_mut().find(|elf| elf.id == elf_id);
+        }
+        None // 如果牧场或精灵未找到，返回 None
+    }
+
     // 收集金币
-    fn collect_gold() ->Option<Event> {
+    pub fn collect_gold() ->Option<Event> {
         None
     }
 
     // 宠物增加经验
-    fn elf_add_exp_event() -> Option<Event> {
-        None
+    pub fn elf_add_exp_event(&mut self,player_id:[u64;2], event_type:u64,
+                         ranch_id:u64, elf_id:u64) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("add exp \n");
+        if let Some(elf)  = self.get_elf_mut(ranch_id, elf_id) {
+            elf.exp += 20;
+            Some(Event {
+                owner: player_id,
+                event_type,
+                ranch_id,
+                elf_id,
+                delta:1
+            })
+        } else {
+            None
+        }
+
     }
 
     // 宠物增加金币
-    fn elf_add_gold_event() -> Option<Event> {
+    pub fn elf_add_gold_event(&mut self,player_id:[u64;2], event_type:u64,
+                              ranch_id:u64, elf_id:u64) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("elf_add_gold_event \n");
         None
     }
 
     // 宠物减少健康事件
-    fn elf_health_reduce_event() -> Option<Event> {
+    pub fn elf_health_reduce_event(&mut self,player_id:[u64;2], event_type:u64,
+                                   ranch_id:u64, elf_id:u64) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("elf_health_reduce_event \n");
         None
     }
 
     // 宠物减少饱食度事件
-    fn elf_satiety_reduce_event() -> Option<Event> {
+    pub fn elf_satiety_reduce_event(&mut self,player_id:[u64;2], event_type:u64,
+                                    ranch_id:u64, elf_id:u64) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("elf_satiety_reduce_event \n");
         None
     }
 
-    fn event_hand (elf_type:u64) -> Option<Event> {
+    // 产生大便，牧场污染度增加
+    pub fn add_shit_event(&mut self,player_id:[u64;2], event_type:u64,
+                                    ranch_id:u64, elf_id:u64) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("add_shit_event \n");
         None
+    }
+
+
+
+    pub fn event_hand (&mut self,player_id:[u64;2], event_type:u64,
+                       ranch_id:u64, elf_id:u64) -> Option<Event> {
+        match event_type as u64 {
+            ADD_EXP =>{
+                self.elf_add_exp_event(player_id,event_type,ranch_id,elf_id)
+            },
+            ADD_GOLD =>{
+                self.elf_add_gold_event(player_id,event_type,ranch_id,elf_id)
+            },
+            HEALTH_REDUCE =>{
+                self.elf_health_reduce_event(player_id,event_type,ranch_id,elf_id)
+            },
+            SATIETY_REDUCE =>{
+                self.elf_satiety_reduce_event(player_id,event_type,ranch_id,elf_id)
+            },
+            ADD_SHIT =>{
+                self.add_shit_event(player_id,event_type,ranch_id,elf_id)
+            },
+            _ => {
+                None
+            }
+        }
     }
 
 }
