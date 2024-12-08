@@ -85,12 +85,12 @@ export class Player {
     }
   }
 
-  async buy_elf(objid: bigint, ranch_index: bigint,elf_type:bigint) {
+  async buy_elf(objid: bigint, ranch_id: bigint,elf_type:bigint) {
     let nonce = await this.getNonce();
     console.log("nonce :",nonce)
     try {
       let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_BUY_ELF, objid), ranch_index, elf_type, 0n]),
+        new BigUint64Array([createCommand(nonce, CMD_BUY_ELF, objid), ranch_id, elf_type, 0n]),
         this.processingKey
       );
       console.log("buy_elf processed at:", finished);
@@ -98,7 +98,7 @@ export class Player {
       if(e instanceof Error) {
         console.log(e.message);
       }
-      console.log("buy_elf error at ranch_index:", ranch_index, "elf_type :", elf_type);
+      console.log("buy_elf error at ranch_id:", ranch_id, "elf_type :", elf_type);
     }
   }
 

@@ -88,7 +88,58 @@ impl Elf {
                 return grade_range.grade; // 如果在区间内，返回等级
             }
         }
-        0 // 如果随机数不在任何区间内，返回 None
+        1 // 如果随机数不在任何区间内，返回 None
+    }
+
+    // 获取需要增加的经验值
+    pub fn compute_need_exp(growth_time: u64, exp: u64) -> u64 {
+        let left_need_exp = 10000 - exp;
+        // 因为growth_time 是分钟，但是这里分钟*了10，所以这里秒钟需要只需要*6
+        // 5秒一次tick，所以每秒钟的经验需要*5
+        let need_exp = (10000.0 / (growth_time as f64 * 6.0)) * 5.0;
+        // 如果计算出的每次需要的经验值超过剩余经验值，返回剩余经验值
+        if need_exp.ceil() as u64 > left_need_exp {
+            return left_need_exp;
+        }
+        // 返回每次任务需要的经验值（向上取整以保证累计不会不足）
+        need_exp.ceil() as u64
+    }
+
+    // 计算需要消耗的健康值
+    pub fn compute_health_reduce(elf: Elf,ranch_clean:u64) -> u64 {
+        // 基础减少百分比
+        let mut base_reduce:f64 = 1.0;
+        // 如果牧场清洁度小于50%，基础减少百分比增加0.5
+        if ranch_clean < 5 {
+            base_reduce += 0.5;
+        }
+        // 如果精灵饱腹度小于50%，基础减少百分比增加0.5
+        if elf.satiety <5000 {
+            base_reduce += 0.5;
+        }
+
+        // 计算需要减少的健康值
+        let need_exp = base_reduce * 10000.0 ;
+        if need_exp.ceil() as u64 > elf.health {
+            return elf.health;
+        }
+        // 返回需要减少的健康值
+        need_exp.ceil() as u64
+    }
+
+    // 计算需要增加的金币值
+    pub fn compute_need_gold(growth_time: u64, exp: u64) -> u64 {
+        let left_need_exp = 10000 - exp;
+        // 因为growth_time 是分钟，但是这里分钟*了10，所以这里秒钟需要只需要*6
+        // 5秒一次tick，所以每秒钟的经验需要*5
+        let need_exp = (10000.0 / (growth_time as f64 * 6.0)) * 5.0;
+        // 如果计算出的每次需要的经验值超过剩余经验值，返回剩余经验值
+        if need_exp.ceil() as u64 > left_need_exp {
+            return left_need_exp;
+        }
+        // 返回每次任务需要的经验值（向上取整以保证累计不会不足）
+
+        need_exp.ceil() as u64
     }
 }
 

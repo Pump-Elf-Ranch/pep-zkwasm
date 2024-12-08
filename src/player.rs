@@ -1,22 +1,21 @@
-use crate::elf::{Elf};
-use crate::Player;
-use crate::StorageData;
-use crate::MERKLE_MAP;
-use serde::Serialize;
-use std::slice::IterMut;
+use crate::elf::Elf;
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
 use crate::prop::Prop;
 use crate::ranch::Ranch;
-use crate::state::STATE;
+use crate::StorageData;
+use crate::{ranch, Player};
+use serde::Serialize;
+use std::slice::IterMut;
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
-    pub gold_count: u64, // 累计金币数量
-    pub clean_count: u64, // 累计清洁次数
-    pub feed_count: u64, // 累计喂食次数
-    pub gold_balance: u64, // 金币余额
-    pub props: Vec<Prop>, // 拥有的道具
-    pub ranchs:Vec<Ranch>, // 拥有的牧场
+    pub gold_count: u64,    // 累计金币数量
+    pub clean_count: u64,   // 累计清洁次数
+    pub feed_count: u64,    // 累计喂食次数
+    pub gold_balance: u64,  // 金币余额
+    pub props: Vec<Prop>,   // 拥有的道具
+    pub ranchs: Vec<Ranch>, // 拥有的牧场
 }
 
 impl Default for PlayerData {
@@ -31,102 +30,168 @@ impl Default for PlayerData {
         }
     }
 }
-const ADD_EXP: u64 = 1; // 经验值增加
-const ADD_GOLD: u64 = 2; // 金币增加
-const HEALTH_REDUCE: u64 = 3; // 健康减少
-const SATIETY_REDUCE: u64 = 4; // 饱食减少
-const ADD_SHIT: u64 = 5; // 产生大便
-
 
 impl PlayerData {
 
+
+    // 根据牧场id和宠物id获得宠物
     pub fn get_elf_mut(&mut self, ranch_id: u64, elf_id: u64) -> Option<&mut Elf> {
+        // 查找指定的牧场
+        let ranch = self.ranchs.iter_mut().find(|r| r.id == ranch_id)?;
+        // 在该牧场中查找指定的精灵
+        ranch.elfs.iter_mut().find(|e| e.id == elf_id)
+    }
+    // 根据牧场id获得牧场
+    pub fn get_ranch_mut(&mut self, ranch_id: u64) -> Option<&mut Ranch> {
         // 在玩家的牧场中查找匹配的牧场
+        self.ranchs.iter_mut().find(|r| r.id == ranch_id)
+    }
+
+    // 获取制定牧场id的宠物数量
+    pub fn get_elf_len(&mut self, ranch_id: u64) -> Option<u64> {
         if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
             // 在该牧场的精灵列表中查找指定的精灵并返回可变引用
-            return ranch.elfs.iter_mut().find(|elf| elf.id == elf_id);
+            let len = ranch.elfs.len() as u64;
+            return Some(len);
         }
-        None // 如果牧场或精灵未找到，返回 None
+        None
+    }
+
+    // 指定牧场，添加宠物
+    pub fn set_elf_by_ranch(&mut self, ranch_id: u64, elf: Elf) {
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            // 在该牧场的精灵列表中查找指定的精灵并返回可变引用
+            ranch.elfs.push(elf);
+            zkwasm_rust_sdk::dbg!("save elf! \n");
+        }
     }
 
     // 收集金币
-    pub fn collect_gold() ->Option<Event> {
+    pub fn collect_gold() -> Option<Event> {
         None
     }
 
     // 宠物增加经验
-    pub fn elf_add_exp_event(&mut self,player_id:[u64;2], event_type:u64,
-                         ranch_id:u64, elf_id:u64) -> Option<Event> {
-        zkwasm_rust_sdk::dbg!("add exp \n");
-        if let Some(elf)  = self.get_elf_mut(ranch_id, elf_id) {
-            elf.exp += 20;
-            Some(Event {
-                owner: player_id,
-                event_type,
-                ranch_id,
-                elf_id,
-                delta:1
-            })
-        } else {
-            None
+    pub fn elf_add_exp_event(
+        &mut self,
+        player_id: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("add exp ranch_id : {:?} ,elf_id: {:?}\n", ranch_id, elf_id);
+        // 尝试获取精灵的可变引用
+        if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
+            let current_elf = elf.clone();
+            let growth_time = current_elf.growth_time;
+            let current_exp = current_elf.exp;
+            let added_exp = Elf::compute_need_exp(growth_time, current_exp);
+            elf.exp += added_exp;
+            zkwasm_rust_sdk::dbg!("add exp is {:?} \n", added_exp);
+            // 如果经验值未达到 10000，返回 Event；否则返回 None
+            if elf.exp < 10000 {
+                return Some(Event {
+                    owner: player_id,
+                    event_type,
+                    ranch_id,
+                    elf_id,
+                    delta: 1,
+                });
+            }
         }
-
+        None
     }
 
     // 宠物增加金币
-    pub fn elf_add_gold_event(&mut self,player_id:[u64;2], event_type:u64,
-                              ranch_id:u64, elf_id:u64) -> Option<Event> {
+    pub fn elf_add_gold_event(
+        &mut self,
+        player_id: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
         zkwasm_rust_sdk::dbg!("elf_add_gold_event \n");
         None
     }
 
     // 宠物减少健康事件
-    pub fn elf_health_reduce_event(&mut self,player_id:[u64;2], event_type:u64,
-                                   ranch_id:u64, elf_id:u64) -> Option<Event> {
-        zkwasm_rust_sdk::dbg!("elf_health_reduce_event \n");
+    pub fn elf_health_reduce_event(
+        &mut self,
+        player_id: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!(
+            "elf_health_reduce_event ranch_id : {:?},elf_id : {:?}\n",
+            ranch_id,
+            elf_id
+        );
+
+        if let Some(ranch) = self.get_ranch_mut(ranch_id) {
+            // 尝试获取精灵的可变引用
+            if let Some(elf) = self.get_elf_mut(ranch.id, elf_id) {
+                let current_elf = elf.clone();
+                let health_reduce = Elf::compute_health_reduce(current_elf, ranch.ranch_clean);
+                elf.health -= health_reduce;
+                zkwasm_rust_sdk::dbg!("reduce health is {:?} \n", health_reduce);
+                // 如果经验值未达到 10000，返回 Event；否则返回 None
+                if elf.health > 0 {
+                    return Some(Event {
+                        owner: player_id,
+                        event_type,
+                        ranch_id,
+                        elf_id,
+                        delta: 60 / 5,
+                    });
+                }
+            }
+        }
         None
     }
 
     // 宠物减少饱食度事件
-    pub fn elf_satiety_reduce_event(&mut self,player_id:[u64;2], event_type:u64,
-                                    ranch_id:u64, elf_id:u64) -> Option<Event> {
+    pub fn elf_satiety_reduce_event(
+        &mut self,
+        player_id: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
         zkwasm_rust_sdk::dbg!("elf_satiety_reduce_event \n");
         None
     }
 
     // 产生大便，牧场污染度增加
-    pub fn add_shit_event(&mut self,player_id:[u64;2], event_type:u64,
-                                    ranch_id:u64, elf_id:u64) -> Option<Event> {
+    pub fn add_shit_event(
+        &mut self,
+        player_id: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
         zkwasm_rust_sdk::dbg!("add_shit_event \n");
         None
     }
 
-
-
-    pub fn event_hand (&mut self,player_id:[u64;2], event_type:u64,
-                       ranch_id:u64, elf_id:u64) -> Option<Event> {
-        match event_type as u64 {
-            ADD_EXP =>{
-                self.elf_add_exp_event(player_id,event_type,ranch_id,elf_id)
-            },
-            ADD_GOLD =>{
-                self.elf_add_gold_event(player_id,event_type,ranch_id,elf_id)
-            },
-            HEALTH_REDUCE =>{
-                self.elf_health_reduce_event(player_id,event_type,ranch_id,elf_id)
-            },
-            SATIETY_REDUCE =>{
-                self.elf_satiety_reduce_event(player_id,event_type,ranch_id,elf_id)
-            },
-            ADD_SHIT =>{
-                self.add_shit_event(player_id,event_type,ranch_id,elf_id)
-            },
-            _ => {
-                None
+    pub fn event_hand(
+        &mut self,
+        player_id: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
+        match event_type {
+            ADD_EXP => self.elf_add_exp_event(player_id, event_type, ranch_id, elf_id),
+            ADD_GOLD => self.elf_add_gold_event(player_id, event_type, ranch_id, elf_id),
+            HEALTH_REDUCE => self.elf_health_reduce_event(player_id, event_type, ranch_id, elf_id),
+            SATIETY_REDUCE => {
+                self.elf_satiety_reduce_event(player_id, event_type, ranch_id, elf_id)
             }
+            ADD_SHIT => self.add_shit_event(player_id, event_type, ranch_id, elf_id),
+            _ => None,
         }
     }
-
 }
 
 impl StorageData for PlayerData {
@@ -182,8 +247,6 @@ impl StorageData for PlayerData {
             ranch.to_data(data); // 使用 Ranch 的 to_data 方法将每个牧场转回数据
         }
     }
-
 }
 
 pub type ElfPlayer = Player<PlayerData>;
-

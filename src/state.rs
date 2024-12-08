@@ -8,10 +8,11 @@ use std::cell::RefCell;
 use crate::elf::Elf;
 use crate::ranch::Ranch;
 use lazy_static::lazy_static;
-use zkwasm_rest_abi::StorageData;
+use zkwasm_rest_abi::{Player, StorageData};
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
+use crate::event_type::ADD_EXP;
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -46,6 +47,8 @@ const WITHDRAW: u64 = 7; // 充值
 const DEPOSIT: u64 = 8; // 提现
 const BOUNTY: u64 = 9;
 const BUY_RANCH: u64 = 10;
+
+
 
 
 impl Transaction {
@@ -89,7 +92,7 @@ impl Transaction {
                 let mut player = ElfPlayer::new_from_pid(*pid);
                 // 初始化一个牧场给用户
                 let ranch_count = player.data.ranchs.len();
-                let ranch_id = ranch_count+1;
+                let ranch_id = ranch_count + 1;
                 let ranch = Ranch::new(ranch_id as u64);
                 player.data.ranchs.push(ranch);
                 player.store();
@@ -98,54 +101,65 @@ impl Transaction {
         }
     }
 
-    pub fn buy_elf(&self, pid: &[u64; 2],rand: u64) -> Result<(), u32> {
-        let mut state = STATE.0.borrow_mut();
+    pub fn buy_elf(&self, pid: &[u64; 2], rand: u64) -> Result<(), u32> {
         let mut player = ElfPlayer::get_from_pid(pid).unwrap();
-        // 获取牧场索引
+        // 获取牧场id
         let ranch_id = self.data[0];
-        if ranch_id  > (player.data.ranchs.len() - 1) as u64 {
-            return Err(ERROR_INDEX_OUT_OF_BOUND);
-        }
         // todo 判断金额是否够，根据类型判断是否符合购买条件，
         // todo 减少用户的金额
         // 获取当前牧场的宠物数量
-        let elfs_count = player.data.ranchs[ranch_id as usize].elfs.len() as u64;
-        let elf_type = self.data[1];
-        // 保存新宠物到牧场
-        let new_elf = Elf::get_elf(rand,elf_type,elfs_count);
-        let elf_id = new_elf.id;
-        player.data.ranchs[ranch_id as usize].elfs.push(new_elf);
-        player.store();
+        if let Some(elfs_count) = player.data.get_elf_len(ranch_id)
+        {
+            zkwasm_rust_sdk::dbg!("elfs_count {:?}\n", elfs_count);
+            if elfs_count == 10 {
+                return Err(ERROR_MAX_ELF);
+            }
+            let elf_type = self.data[1];
+            // 保存新宠物到牧场
+            let new_elf = Elf::get_elf(rand, elf_type, elfs_count);
+            let elf_id = new_elf.id;
+            player.data.set_elf_by_ranch(ranch_id, new_elf);
+            player.store();
+            // 初始化宠物事件
+            self.init_event(*pid, ranch_id, elf_id);
+            zkwasm_rust_sdk::dbg!("buy elf \n");
+            // todo 增加队列，宠物健康消耗，宠物饱食度消耗，经验成长，金币增长，便便产生（3分钟一坨，牧场最多10坨，满了10坨不再产生）
+            Ok(())
+        } else {
+            Err(ERROR_NOT_FOUND_RANCH)
+        }
+    }
+
+    pub fn init_event(&self, player_id: [u64; 2], ranch_id: u64, elf_id: u64) {
+        let mut state = STATE.0.borrow_mut();
+        // state.queue.insert()'
+        self.init_add_exp_event(&mut state, &player_id, ranch_id, elf_id);
+    }
+
+    // 初始化添加金币事件
+    pub fn init_add_gold_event(&self) {}
+
+    // 初始化添加经验
+    pub fn init_add_exp_event(&self, mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
-            event_type: 1,
+            event_type: ADD_EXP,
             ranch_id,
             elf_id,
             delta: 1,
         });
-        // todo 增加队列，宠物健康消耗，宠物饱食度消耗，经验成长，金币增长，便便产生（3分钟一坨，牧场最多10坨，满了10坨不再产生）
-        Ok(())
-    }
-
-    pub fn init_event( player_id:[u64;2], ranch_id:usize, elf_index:usize){
-        let mut state =  STATE.0.borrow_mut();
-        // state.queue.insert()
-    }
-
-    pub fn init_add_gold_event() {
-
     }
 
     pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
         zkwasm_rust_sdk::dbg!("rand {:?}\n", {sigr});
-        let rand =sigr[0] ^ sigr[1] ^ sigr[2] ^ sigr[3];
+        let rand = sigr[0] ^ sigr[1] ^ sigr[2] ^ sigr[3];
         let b = match self.command {
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             BUY_ELF =>
-                 self.buy_elf(&ElfPlayer::pkey_to_pid(&pkey), rand)
+                self.buy_elf(&ElfPlayer::pkey_to_pid(&pkey), rand)
                     .map_or_else(|e| e, |_| 0),
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
@@ -190,7 +204,7 @@ impl State {
 
     pub fn preempt() -> bool {
         let counter = STATE.0.borrow().queue.counter;
-        if counter % 5 == 0 {
+        if counter % 32 == 0 {
             true
         } else {
             false

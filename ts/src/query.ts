@@ -7,7 +7,7 @@ let player = new Player(account);
 async function main() {
   await player.installPlayer();
 
-  await player.buy_elf(1n,0n,2n)
+  await player.buy_elf(1n,1n,2n)
   for (let i = 0; i < 100000; i++) {
     let data = await player.getState();
 
