@@ -32,8 +32,6 @@ impl Default for PlayerData {
 }
 
 impl PlayerData {
-
-
     // 根据牧场id和宠物id获得宠物
     pub fn get_elf_mut(&mut self, ranch_id: u64, elf_id: u64) -> Option<&mut Elf> {
         // 查找指定的牧场
@@ -95,7 +93,7 @@ impl PlayerData {
                     event_type,
                     ranch_id,
                     elf_id,
-                    delta: 1,
+                    delta: 1, // 每5秒触发一次的加经验值
                 });
             }
         }
@@ -111,6 +109,23 @@ impl PlayerData {
         elf_id: u64,
     ) -> Option<Event> {
         zkwasm_rust_sdk::dbg!("elf_add_gold_event \n");
+        // 尝试获取精灵的可变引用
+        if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
+            let current_elf = elf.clone();
+            let add_gold = Elf::compute_need_gold(current_elf);
+            zkwasm_rust_sdk::dbg!("add gold is {:?} \n", add_gold);
+            elf.current_gold_store += add_gold;
+            // 如果经验值未达到 10000，返回 Event；否则返回 None
+            if elf.current_gold_store < elf.max_gold_store {
+                return Some(Event {
+                    owner: player_id,
+                    event_type,
+                    ranch_id,
+                    elf_id,
+                    delta: 1, // 每5秒触发一次的加金币
+                });
+            }
+        }
         None
     }
 
@@ -123,30 +138,57 @@ impl PlayerData {
         elf_id: u64,
     ) -> Option<Event> {
         zkwasm_rust_sdk::dbg!(
-            "elf_health_reduce_event ranch_id : {:?},elf_id : {:?}\n",
+            "Starting elf_health_reduce_event: ranch_id={:?}, elf_id={:?}\n",
             ranch_id,
             elf_id
         );
 
-        if let Some(ranch) = self.get_ranch_mut(ranch_id) {
-            // 尝试获取精灵的可变引用
-            if let Some(elf) = self.get_elf_mut(ranch.id, elf_id) {
-                let current_elf = elf.clone();
-                let health_reduce = Elf::compute_health_reduce(current_elf, ranch.ranch_clean);
-                elf.health -= health_reduce;
-                zkwasm_rust_sdk::dbg!("reduce health is {:?} \n", health_reduce);
-                // 如果经验值未达到 10000，返回 Event；否则返回 None
-                if elf.health > 0 {
-                    return Some(Event {
-                        owner: player_id,
-                        event_type,
-                        ranch_id,
-                        elf_id,
-                        delta: 60 / 5,
-                    });
-                }
-            }
+        // 提取牧场引用到一个临时作用域
+        let ranch_clean;
+        {
+            let ranch = self.get_ranch_mut(ranch_id)?;
+            ranch_clean = ranch.ranch_clean;
         }
+
+        // 获取精灵的可变引用
+        let elf = match self.get_elf_mut(ranch_id, elf_id) {
+            Some(e) => e,
+            None => {
+                zkwasm_rust_sdk::dbg!(
+                    "Elf with id {:?} not found in ranch {:?}\n",
+                    elf_id,
+                    ranch_id
+                );
+                return None;
+            }
+        };
+
+        // 计算健康值减少
+        let health_reduce = Elf::compute_health_reduce(elf.clone(), ranch_clean);
+        zkwasm_rust_sdk::dbg!(
+            "Reducing health for elf_id={:?} by {:?} points\n",
+            elf_id,
+            health_reduce
+        );
+
+        // 更新精灵健康值
+        elf.health -= health_reduce;
+
+        // 检查健康值是否大于 0，如果大于 0，返回事件
+        if elf.health > 0 {
+            return Some(Event {
+                owner: player_id,
+                event_type,
+                ranch_id,
+                elf_id,
+                delta: 1, // 每5秒触发一次减少健康度
+            });
+        }
+
+        zkwasm_rust_sdk::dbg!(
+            "Elf with id {:?} has 0 health, no event generated\n",
+            elf_id
+        );
         None
     }
 
@@ -158,19 +200,62 @@ impl PlayerData {
         ranch_id: u64,
         elf_id: u64,
     ) -> Option<Event> {
-        zkwasm_rust_sdk::dbg!("elf_satiety_reduce_event \n");
+        zkwasm_rust_sdk::dbg!(
+            "elf_satiety_reduce_event ranch_id : {:?} ,elf_id: {:?}\n",
+            ranch_id,
+            elf_id
+        );
+        // 提取牧场引用到一个临时作用域
+        let ranch_clean;
+        {
+            let ranch = self.get_ranch_mut(ranch_id)?;
+            ranch_clean = ranch.ranch_clean;
+        }
+        // 尝试获取精灵的可变引用
+        if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
+            let current_elf = elf.clone();
+            let satiety_reduce = Elf::compute_satiety_reduce(current_elf);
+            zkwasm_rust_sdk::dbg!("satiety_reduce is {:?} \n", satiety_reduce);
+            elf.satiety -= satiety_reduce;
+            // 如果饱食度，返回 Event；否则返回 None
+            if elf.satiety > 0 {
+                return Some(Event {
+                    owner: player_id,
+                    event_type,
+                    ranch_id,
+                    elf_id,
+                    delta: 1, // 5秒一次tick，减少饱食度
+                });
+            }
+        }
         None
     }
 
     // 产生大便，牧场污染度增加
     pub fn add_shit_event(
         &mut self,
-        player_id: [u64; 2],
+        owner: [u64; 2],
         event_type: u64,
         ranch_id: u64,
         elf_id: u64,
     ) -> Option<Event> {
         zkwasm_rust_sdk::dbg!("add_shit_event \n");
+        // 尝试获取精灵的可变引用
+        if let Some(ranch) = self.get_ranch_mut(ranch_id) {
+            if ranch.ranch_clean < 10 {
+                ranch.ranch_clean += 1;
+                zkwasm_rust_sdk::dbg!("add ranch clean! \n");
+            }
+            if ranch.ranch_clean < 10 {
+                return Some(Event {
+                    owner,
+                    event_type,
+                    ranch_id,
+                    elf_id,
+                    delta: (60 / 5) * 3,
+                });
+            }
+        }
         None
     }
 

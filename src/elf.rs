@@ -9,17 +9,17 @@ use zkwasm_rust_sdk::PoseidonHasher;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Elf {
-    pub id: u64,                   // 精灵id
-    pub name: &'static str,        // 精灵名字
-    pub health: u64,               // 健康度
-    pub satiety: u64,              // 饱腹度
-    pub exp: u64,                  // 经验值
-    pub growth_time: u64,          // 成长时间
-    pub grade: u64,                // 品质等级
-    pub max_gold_store: u64,       // 最大金币存储量
-    pub current_gold_store: u64, // 当前储存的金币数量
+    pub id: u64,                        // 精灵id
+    pub name: &'static str,             // 精灵名字
+    pub health: u64,                    // 健康度
+    pub satiety: u64,                   // 饱腹度
+    pub exp: u64,                       // 经验值
+    pub growth_time: u64,               // 成长时间
+    pub grade: u64,                     // 品质等级
+    pub max_gold_store: u64,            // 最大金币存储量
+    pub current_gold_store: u64,        // 当前储存的金币数量
     pub current_gold_produce_base: u64, // 当前金币产出基础值
-    pub elf_type: u64,             // 精灵类型
+    pub elf_type: u64,                  // 精灵类型
 }
 
 impl Elf {
@@ -41,7 +41,7 @@ impl Elf {
             growth_time,
             grade,
             max_gold_store,
-            current_gold_store:0,
+            current_gold_store: 0,
             current_gold_produce_base,
             elf_type,
         }
@@ -53,11 +53,14 @@ impl Elf {
         let random = get_random(rand, 100);
         let grade = Elf::get_grade_by_random(random);
         let elf_new_id = elf_id + 1;
-        Elf::get_elf_by_type_and_grade(elf_type, elf_new_id, grade)
+        Elf::get_elf_by_type_and_grade(elf_type, grade, elf_new_id)
     }
 
     // 根据精灵类型和等级获取精灵
     fn get_elf_by_type_and_grade(elf_type: u64, grade: u64, elf_id: u64) -> Elf {
+
+        zkwasm_rust_sdk::dbg!("elf_type is {:?} grade is {:?}\n", elf_type, grade);
+
         // 过滤出符合 elf_type 和 grade 的精灵
         let filtered_elfs: Vec<&StandElf> = DEFAULT_STAND_ELF
             .iter()
@@ -82,13 +85,13 @@ impl Elf {
     // 获取等级
     fn get_grade_by_random(random_num: u64) -> u64 {
         // 遍历每个精灵等级区间
-        for grade_range in  &*DEFAULT_STAND_ELF_RANDOM {
+        for grade_range in &*DEFAULT_STAND_ELF_RANDOM {
             // 判断随机数是否在当前区间内
             if random_num >= grade_range.start && random_num <= grade_range.end {
-                return grade_range.grade; // 如果在区间内，返回等级
+                return  grade_range.grade; // 如果在区间内，返回等级
             }
         }
-        1 // 如果随机数不在任何区间内，返回 None
+        1
     }
 
     // 获取需要增加的经验值
@@ -106,41 +109,104 @@ impl Elf {
     }
 
     // 计算需要消耗的健康值
-    pub fn compute_health_reduce(elf: Elf,ranch_clean:u64) -> u64 {
+    pub fn compute_health_reduce(elf: Elf, ranch_clean: u64) -> u64 {
+        let left_health = 10000 - elf.health;
         // 基础减少百分比
-        let mut base_reduce:f64 = 1.0;
+        let mut base_reduce: f64 = 1.0;
         // 如果牧场清洁度小于50%，基础减少百分比增加0.5
-        if ranch_clean < 5 {
+        if ranch_clean > 5 {
             base_reduce += 0.5;
         }
         // 如果精灵饱腹度小于50%，基础减少百分比增加0.5
-        if elf.satiety <5000 {
+        if elf.satiety < 5000 {
             base_reduce += 0.5;
         }
 
-        // 计算需要减少的健康值
-        let need_exp = base_reduce * 10000.0 ;
-        if need_exp.ceil() as u64 > elf.health {
-            return elf.health;
+        // 计算需要每分钟减少的健康值
+        let need_reduce = (base_reduce / 100.0) * 10000.0;
+        zkwasm_rust_sdk::dbg!("need_reduce is {:?}\n", need_reduce);
+        // 每5秒一次的tick, 所以每分钟会执行12次，减少的健康值需要 need_reduce /(60/5)
+        let need_reduce = (need_reduce / (60.0/5.0)).ceil() as u64;
+        zkwasm_rust_sdk::dbg!("need_reduce2 is {:?}\n", need_reduce);
+        // 如果计算出的每次需要的健康值超过剩余健康值，返回剩余健康值
+        if need_reduce > left_health && elf.health < 10000 {
+            return left_health;
         }
+        zkwasm_rust_sdk::dbg!("final is {:?}\n", need_reduce);
         // 返回需要减少的健康值
-        need_exp.ceil() as u64
+        need_reduce
+    }
+
+    // 计算需要减少的饱食度
+    pub fn compute_satiety_reduce(elf: Elf) -> u64 {
+        let left_satiety = 10000 - elf.satiety;
+        // 基础减少百分比
+        let mut base_reduce: f64 = 2.0;
+
+        // 计算需要减少的健康值
+        let need_reduce = (base_reduce / 100.0) * 10000.0;
+        // 每5秒一次的tick, 所以每小时会执行12 * 60次，减少的饱食度需要 need_reduce /(60*60/5)
+        let need_reduce = (need_reduce / (60.0*60.0/5.0 )).ceil() as u64 ;
+        if need_reduce  > left_satiety && elf.satiety < 10000 {
+            return left_satiety;
+        }
+        // 返回需要减少的饱食度
+        need_reduce
     }
 
     // 计算需要增加的金币值
-    pub fn compute_need_gold(growth_time: u64, exp: u64) -> u64 {
-        let left_need_exp = 10000 - exp;
-        // 因为growth_time 是分钟，但是这里分钟*了10，所以这里秒钟需要只需要*6
-        // 5秒一次tick，所以每秒钟的经验需要*5
-        let need_exp = (10000.0 / (growth_time as f64 * 6.0)) * 5.0;
-        // 如果计算出的每次需要的经验值超过剩余经验值，返回剩余经验值
-        if need_exp.ceil() as u64 > left_need_exp {
-            return left_need_exp;
-        }
-        // 返回每次任务需要的经验值（向上取整以保证累计不会不足）
+    pub fn compute_need_gold(elf: Elf) -> u64 {
+        let left_can_add_gold = elf.max_gold_store - elf.current_gold_store;
 
-        need_exp.ceil() as u64
+        // 基础金币系数
+        let base_gold: f64 = elf.current_gold_produce_base as f64;
+
+        // 健康系数
+        // 健康值 ≥ 80% = 1.0, 健康值 50-79% = 0.8, 健康值 30-49% = 0.5, 健康值 < 30% = 0.0（不产出金币）。
+        let mut health_gold: f64 = 1.0;
+        if elf.health < 8000 {
+            health_gold = 0.8;
+        } else if elf.health < 5000 {
+            health_gold = 0.5;
+        } else if elf.health < 3000 {
+            health_gold = 0.0;
+        }
+        // 成长阶段系数
+        // 幼年 = 0.5, 成年 = 1.0。
+        let mut growth_gold: f64 = 1.0;
+        if elf.exp < 5000 {
+            growth_gold = 0.5;
+        }
+        // 星级系数
+        // 1星 = 0.5, 2星 = 1.0, 3星 = 1.5, 4星 = 2.0, 5星 = 2.5。
+        let mut grade_gold: f64 = 1.0;
+        match elf.grade {
+            1 => grade_gold = 1.0,
+            2 => grade_gold = 1.5,
+            3 => grade_gold = 2.5,
+            4 => grade_gold = 4.0,
+            5 => grade_gold = 5.0,
+            _ => {}
+        }
+        // 饱食度
+        // • 饱腹度 ≥ 50% = 1.0, 饱腹度 < 50% = 0.5, 饱腹度 < 10% = 0.0（不产出金币）。
+        let mut satiety_gold: f64 = 1.0;
+        if elf.satiety < 5000 {
+            satiety_gold = 0.5;
+        } else if elf.satiety < 1000 {
+            satiety_gold = 0.0;
+        }
+
+        // 每分钟可以增加的金币
+        let need_add = base_gold  * health_gold * growth_gold * grade_gold * satiety_gold;
+        // 每5秒一次的tick, 所以每分钟会执行12次，增加的金币需要 need_add /(60/5)
+        let need_add = need_add / (60.0/5.0);
+        if need_add.ceil() as u64 > left_can_add_gold {
+            return left_can_add_gold;
+        }
+        need_add.ceil() as u64
     }
+
 }
 
 impl StorageData for Elf {
@@ -215,15 +281,15 @@ impl StorageData for Elf {
 // 平台精灵参数
 #[derive(Clone, Debug, Serialize)]
 pub struct StandElf {
-    pub id: u64,                   // 精灵id
-    pub name: &'static str,        // 精灵名字
-    pub buy_price: u64,            // 购买价格
-    pub growth_time: u64,          // 成长时间
+    pub id: u64,                        // 精灵id
+    pub name: &'static str,             // 精灵名字
+    pub buy_price: u64,                 // 购买价格
+    pub growth_time: u64,               // 成长时间
     pub max_gold_store_base: u64,       // 最大金币存储量基数
     pub current_gold_produce_base: u64, // 当前金币产出基础值
-    pub elf_type: u64,             // 精灵类型
-    pub grade: u64,                // 品质等级
-    pub sell_price: u64,           // 出售价格
+    pub elf_type: u64,                  // 精灵类型
+    pub grade: u64,                     // 品质等级
+    pub sell_price: u64,                // 出售价格
 }
 
 impl StandElf {

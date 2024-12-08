@@ -12,7 +12,7 @@ use zkwasm_rest_abi::{Player, StorageData};
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
-use crate::event_type::ADD_EXP;
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -90,6 +90,8 @@ impl Transaction {
             Some(_) => Err(ERROR_PLAYER_ALREADY_EXIST),
             None => {
                 let mut player = ElfPlayer::new_from_pid(*pid);
+                player.check_and_inc_nonce(self.nonce);
+
                 // 初始化一个牧场给用户
                 let ranch_count = player.data.ranchs.len();
                 let ranch_id = ranch_count + 1;
@@ -103,6 +105,7 @@ impl Transaction {
 
     pub fn buy_elf(&self, pid: &[u64; 2], rand: u64) -> Result<(), u32> {
         let mut player = ElfPlayer::get_from_pid(pid).unwrap();
+        player.check_and_inc_nonce(self.nonce);
         // 获取牧场id
         let ranch_id = self.data[0];
         // todo 判断金额是否够，根据类型判断是否符合购买条件，
@@ -118,12 +121,12 @@ impl Transaction {
             // 保存新宠物到牧场
             let new_elf = Elf::get_elf(rand, elf_type, elfs_count);
             let elf_id = new_elf.id;
+            zkwasm_rust_sdk::dbg!("elf_id is {:?}\n", elf_id);
             player.data.set_elf_by_ranch(ranch_id, new_elf);
             player.store();
             // 初始化宠物事件
             self.init_event(*pid, ranch_id, elf_id);
             zkwasm_rust_sdk::dbg!("buy elf \n");
-            // todo 增加队列，宠物健康消耗，宠物饱食度消耗，经验成长，金币增长，便便产生（3分钟一坨，牧场最多10坨，满了10坨不再产生）
             Ok(())
         } else {
             Err(ERROR_NOT_FOUND_RANCH)
@@ -134,12 +137,25 @@ impl Transaction {
         let mut state = STATE.0.borrow_mut();
         // state.queue.insert()'
         self.init_add_exp_event(&mut state, &player_id, ranch_id, elf_id);
+        self.init_health_reduce_event(&mut state, &player_id, ranch_id, elf_id);
+        self.init_satiety_reduce_event(&mut state, &player_id, ranch_id, elf_id);
+        self.init_add_gold_event(&mut state, &player_id, ranch_id, elf_id);
+        self.init_add_shit_event(&mut state, &player_id, ranch_id, elf_id);
     }
 
     // 初始化添加金币事件
-    pub fn init_add_gold_event(&self) {}
+    pub fn init_add_gold_event(&self,mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+        // 给新的宠物添加事件
+        state.queue.insert(Event {
+            owner: *pid,
+            event_type: ADD_GOLD,
+            ranch_id,
+            elf_id,
+            delta: 1,
+        });
+    }
 
-    // 初始化添加经验
+    // 初始化添加经验的事件
     pub fn init_add_exp_event(&self, mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
@@ -148,6 +164,42 @@ impl Transaction {
             ranch_id,
             elf_id,
             delta: 1,
+        });
+    }
+
+    // 初始化减少健康值的事件
+    pub fn init_health_reduce_event(&self, mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+        // 给新的宠物添加事件
+        state.queue.insert(Event {
+            owner: *pid,
+            event_type: HEALTH_REDUCE,
+            ranch_id,
+            elf_id,
+            delta: 1, // 5秒一次tick， 每分钟减少健康度
+        });
+    }
+
+    // 初始化减少饱食度事件
+    pub fn init_satiety_reduce_event(&self, state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+        // 给新的宠物添加事件
+        state.queue.insert(Event {
+            owner: *pid,
+            event_type: SATIETY_REDUCE,
+            ranch_id,
+            elf_id,
+            delta: 1, // 5秒一次tick，每小时减少饱食度
+        });
+    }
+
+    // 初始化污染度增加事件
+    pub fn init_add_shit_event(&self, state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+        // 给新的宠物添加事件
+        state.queue.insert(Event {
+            owner: *pid,
+            event_type: ADD_SHIT,
+            ranch_id,
+            elf_id,
+            delta: (60/5) * 3, // 5秒一次tick，每3分钟增加shit
         });
     }
 
@@ -164,6 +216,8 @@ impl Transaction {
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
+                let event_count = STATE.0.borrow_mut().queue.list.len();
+                zkwasm_rust_sdk::dbg!("eventCount {:?}\n", event_count);
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
