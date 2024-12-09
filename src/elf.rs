@@ -1,10 +1,12 @@
 use crate::config::get_random;
+use crate::player::ElfPlayer;
 use lazy_static::lazy_static;
 use serde::Serialize;
 use std::slice::IterMut;
 use std::str;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rust_sdk::PoseidonHasher;
+use crate::error::ERROR_INVALID_PURCHASE_CONDITION;
 // 导入 std::str 模块
 
 #[derive(Clone, Debug, Serialize)]
@@ -21,6 +23,18 @@ pub struct Elf {
     pub current_gold_produce_base: u64, // 当前金币产出基础值
     pub elf_type: u64,                  // 精灵类型
 }
+
+// 精灵类型，买入价格，卖出价格
+const Hippo: (u64,u64,u64) = (1,100,100);
+const Slerf: (u64,u64,u64) = (2,300,300);
+const Goat: (u64,u64,u64) = (3,1800,1800);
+const Pnut: (u64,u64,u64) = (4,6000,6000);
+const Popcat: (u64,u64,u64) = (5,15000,15000);
+const Brett: (u64,u64,u64) = (6,37500,37500);
+const Wif: (u64,u64,u64) = (7,93750,93750);
+const Bonk: (u64,u64,u64) = (8,152000,152000);
+const Pepe: (u64,u64,u64) = (9,220000,220000);
+const Doge: (u64,u64,u64) = (10,300000,300000);
 
 impl Elf {
     pub fn new(
@@ -56,9 +70,156 @@ impl Elf {
         Elf::get_elf_by_type_and_grade(elf_type, grade, elf_new_id)
     }
 
+    // 根据类型判断是否可以购买精灵
+    pub fn check_can_buy_elf(pid: &[u64; 2], ranch_id: u64, elf_type: u64) -> Result<u64, u32> {
+        let player = ElfPlayer::get_from_pid(pid).unwrap();
+        match elf_type {
+            x if x == Hippo.0 => Ok(100),
+            x if x == Slerf.0 => Elf::check_can_buy_slerf(player, ranch_id),
+            x if x == Goat.0 => Elf::check_can_buy_goat(player, ranch_id),
+            x if x == Pnut.0 => Elf::check_can_buy_pnut(player, ranch_id),
+            x if x == Popcat.0 => Elf::check_can_buy_popcat(player),
+            x if x == Brett.0 => Elf::check_can_buy_brett(player),
+            x if x == Wif.0 => Elf::check_can_buy_wif(player, ranch_id),
+            x if x == Bonk.0 => Elf::check_can_buy_bonk(player),
+            x if x == Pepe.0 => Elf::check_can_buy_pepe(player, ranch_id),
+            x if x == Doge.0 => Elf::check_can_buy_doge(player, ranch_id),
+            _ => Err(ERROR_INVALID_PURCHASE_CONDITION),
+        }
+    }
+
+    // 是否可以购买 Slerf
+    pub fn check_can_buy_slerf(mut player: ElfPlayer, ranch_id: u64) -> Result<u64, u32> {
+        // 养一只成年Hippo
+        if let Some(ranch) = player.data.get_ranch_mut(ranch_id) {
+            for elf in &ranch.elfs {
+                if elf.elf_type == Hippo.0 && elf.exp == 10000 {
+                    return Ok(Slerf.1);
+                }
+            }
+        }
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 goat
+    pub fn check_can_buy_goat(mut player: ElfPlayer, ranch_id: u64) -> Result<u64, u32> {
+        // 养两只成年Slerf
+        let mut count = 0;
+        if let Some(ranch) = player.data.get_ranch_mut(ranch_id) {
+            for elf in &ranch.elfs {
+                if elf.elf_type == Slerf.0 && elf.exp == 10000 {
+                    count += 1;
+                }
+            }
+            if count >= 2 {
+                return Ok(Goat.1);
+            }
+        }
+
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 Pnut
+    pub fn check_can_buy_pnut(mut player: ElfPlayer, ranch_id: u64) -> Result<u64, u32> {
+        // 养五只成年Goat
+        let mut count = 0;
+        if let Some(ranch) = player.data.get_ranch_mut(ranch_id) {
+            for elf in &ranch.elfs {
+                if elf.elf_type == Goat.0 && elf.exp == 10000 {
+                    count += 1;
+                }
+            }
+            if count >= 5 {
+                return Ok(Pnut.1)
+            }
+        }
+
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 popcat
+    pub fn check_can_buy_popcat(mut player: ElfPlayer) -> Result<u64, u32> {
+        // 铲屎1500次
+        if player.data.clean_count >= 1500 {
+           return  Ok(Popcat.1);
+        }
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 Brett
+    pub fn check_can_buy_brett(mut player: ElfPlayer) -> Result<u64, u32> {
+        // 喂食5000次
+        if player.data.feed_count >= 5000 {
+            return Ok(Brett.1);
+        }
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 Wif
+    pub fn check_can_buy_wif(mut player: ElfPlayer, ranch_id: u64) -> Result<u64, u32> {
+        // 养五只成年Brett
+        let mut count = 0;
+        if let Some(ranch) = player.data.get_ranch_mut(ranch_id) {
+            for elf in &ranch.elfs {
+                if elf.elf_type == Brett.0 && elf.exp == 10000 {
+                    count += 1;
+                }
+            }
+            if count >= 5 {
+                return Ok(Wif.1);
+            }
+        }
+
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 Bonk
+    pub fn check_can_buy_bonk(mut player: ElfPlayer) -> Result<u64, u32> {
+        // 累计收集30万个金币
+        if player.data.gold_count >= 300000 {
+            return Ok(Bonk.1);
+        }
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 Pepe
+    pub fn check_can_buy_pepe(mut player: ElfPlayer, ranch_id: u64) -> Result<u64, u32> {
+        // 养五只成年Bonk
+        let mut count = 0;
+        if let Some(ranch) = player.data.get_ranch_mut(ranch_id) {
+            for elf in &ranch.elfs {
+                if elf.elf_type == Bonk.0 && elf.exp == 10000 {
+                    count += 1;
+                }
+            }
+            if count >= 5 {
+                return Ok(Pepe.1);
+            }
+        }
+
+
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
+    // 是否可以购买 Doge
+    pub fn check_can_buy_doge(mut player: ElfPlayer, ranch_id: u64) -> Result<u64, u32> {
+        // 累计收集210万个金币，并养成五只成年Pepe
+        let mut count = 0;
+        if let Some(ranch) = player.data.get_ranch_mut(ranch_id) {
+            for elf in &ranch.elfs {
+                if elf.elf_type == Pepe.0 && elf.exp == 10000 {
+                    count += 1;
+                }
+            }
+            if count >= 5 && player.data.gold_count >= 2100000 {
+                return Ok(Doge.1);
+            }
+        }
+        Err(ERROR_INVALID_PURCHASE_CONDITION)
+    }
+
     // 根据精灵类型和等级获取精灵
     fn get_elf_by_type_and_grade(elf_type: u64, grade: u64, elf_id: u64) -> Elf {
-
         zkwasm_rust_sdk::dbg!("elf_type is {:?} grade is {:?}\n", elf_type, grade);
 
         // 过滤出符合 elf_type 和 grade 的精灵
@@ -88,7 +249,7 @@ impl Elf {
         for grade_range in &*DEFAULT_STAND_ELF_RANDOM {
             // 判断随机数是否在当前区间内
             if random_num >= grade_range.start && random_num <= grade_range.end {
-                return  grade_range.grade; // 如果在区间内，返回等级
+                return grade_range.grade; // 如果在区间内，返回等级
             }
         }
         1
@@ -126,7 +287,7 @@ impl Elf {
         let need_reduce = (base_reduce / 100.0) * 10000.0;
         zkwasm_rust_sdk::dbg!("need_reduce is {:?}\n", need_reduce);
         // 每5秒一次的tick, 所以每分钟会执行12次，减少的健康值需要 need_reduce /(60/5)
-        let need_reduce = (need_reduce / (60.0/5.0)).ceil() as u64;
+        let need_reduce = (need_reduce / (60.0 / 5.0)).ceil() as u64;
         zkwasm_rust_sdk::dbg!("need_reduce2 is {:?}\n", need_reduce);
         // 如果计算出的每次需要的健康值超过剩余健康值，返回剩余健康值
         if need_reduce > left_health && elf.health < 10000 {
@@ -146,8 +307,8 @@ impl Elf {
         // 计算需要减少的健康值
         let need_reduce = (base_reduce / 100.0) * 10000.0;
         // 每5秒一次的tick, 所以每小时会执行12 * 60次，减少的饱食度需要 need_reduce /(60*60/5)
-        let need_reduce = (need_reduce / (60.0*60.0/5.0 )).ceil() as u64 ;
-        if need_reduce  > left_satiety && elf.satiety < 10000 {
+        let need_reduce = (need_reduce / (60.0 * 60.0 / 5.0)).ceil() as u64;
+        if need_reduce > left_satiety && elf.satiety < 10000 {
             return left_satiety;
         }
         // 返回需要减少的饱食度
@@ -198,15 +359,14 @@ impl Elf {
         }
 
         // 每分钟可以增加的金币
-        let need_add = base_gold  * health_gold * growth_gold * grade_gold * satiety_gold;
+        let need_add = base_gold * health_gold * growth_gold * grade_gold * satiety_gold;
         // 每5秒一次的tick, 所以每分钟会执行12次，增加的金币需要 need_add /(60/5)
-        let need_add = need_add / (60.0/5.0);
+        let need_add = need_add / (60.0 / 5.0);
         if need_add.ceil() as u64 > left_can_add_gold {
             return left_can_add_gold;
         }
         need_add.ceil() as u64
     }
-
 }
 
 impl StorageData for Elf {
@@ -334,73 +494,73 @@ impl ElfGradeRandom {
 lazy_static::lazy_static! {
     pub static ref DEFAULT_STAND_ELF: Vec<StandElf> = vec![
         // Hippo
-        StandElf::new(1, "Hippo", 100, 50, 5, 18, 1,1,100),
-        StandElf::new(2, "Hippo", 100, 75,  10, 18, 1,2,100),
-        StandElf::new(3, "Hippo", 100, 100,  15, 18, 1,3,100),
-        StandElf::new(4, "Hippo", 100, 150, 20, 18, 1,4,100),
-        StandElf::new(5, "Hippo", 100, 200, 30, 18, 1,5,100),
+        StandElf::new(1, "Hippo", Hippo.1, 50, 5, 18, Hippo.0,1,Hippo.2),
+        StandElf::new(2, "Hippo", Hippo.1, 75,  10, 18, Hippo.0,2,Hippo.2),
+        StandElf::new(3, "Hippo", Hippo.1, 100,  15, 18, Hippo.0,3,Hippo.2),
+        StandElf::new(4, "Hippo", Hippo.1, 150, 20, 18, Hippo.0,4,Hippo.2),
+        StandElf::new(5, "Hippo", Hippo.1, 200, 30, 18, Hippo.0,5,Hippo.2),
         // Slerf
-        StandElf::new(6, "Slerf", 300, 50, 5, 30, 2,1, 300),
-        StandElf::new(7, "Slerf", 300, 75,  10, 30, 2,2, 300),
-        StandElf::new(8, "Slerf", 300, 100,  15, 30, 2,3, 300),
-        StandElf::new(9, "Slerf", 300, 150, 20, 30, 2,4, 300),
-        StandElf::new(10, "Slerf", 300, 200, 30, 30, 2,5, 300),
+        StandElf::new(6, "Slerf", Slerf.1, 50, 5, 30, Slerf.0,1, Slerf.2),
+        StandElf::new(7, "Slerf", Slerf.1, 75,  10, 30, Slerf.0,2, Slerf.2),
+        StandElf::new(8, "Slerf", Slerf.1, 100,  15, 30, Slerf.0,3, Slerf.2),
+        StandElf::new(9, "Slerf", Slerf.1, 150, 20, 30, Slerf.0,4, Slerf.2),
+        StandElf::new(10, "Slerf", Slerf.1, 200, 30, 30, Slerf.0,5, Slerf.2),
 
          // Goat
-        StandElf::new(11, "Goat", 1800, 50, 5, 50, 3,1, 1800),
-        StandElf::new(12, "Goat", 1800, 75,  10, 50, 3,2, 1800),
-        StandElf::new(13, "Goat", 1800, 100,  15, 50, 3,3, 1800),
-        StandElf::new(14, "Goat", 1800, 150, 20, 50, 3,4, 1800),
-        StandElf::new(15, "Goat", 1800, 200, 30, 50, 3,5, 1800),
+        StandElf::new(11, "Goat",  Goat.1, 50, 5, 50, Goat.0,1, Goat.2),
+        StandElf::new(12, "Goat", Goat.1, 75,  10, 50, Goat.0,2, Goat.2),
+        StandElf::new(13, "Goat", Goat.1, 100,  15, 50, Goat.0,3, Goat.2),
+        StandElf::new(14, "Goat", Goat.1, 150, 20, 50, Goat.0,4, Goat.2),
+        StandElf::new(15, "Goat", Goat.1, 200, 30, 50, Goat.0,5, Goat.2),
 
         // Pnut
-        StandElf::new(16, "Pnut", 6000, 80, 5, 70, 4,1, 6000),
-        StandElf::new(17, "Pnut", 6000, 160,  10, 70, 4,2, 6000),
-        StandElf::new(18, "Pnut", 6000, 210,  15, 70, 4,3, 6000),
-        StandElf::new(19, "Pnut", 6000, 280, 20, 70, 4,4, 6000),
-        StandElf::new(20, "Pnut", 6000, 300, 30, 70, 4,5, 6000),
+        StandElf::new(16, "Pnut", Pnut.1, 80, 5, 70, Pnut.0,1, Pnut.2),
+        StandElf::new(17, "Pnut", Pnut.1, 160,  10, 70, Pnut.0,2, Pnut.2),
+        StandElf::new(18, "Pnut", Pnut.1, 210,  15, 70, Pnut.0,3, Pnut.2),
+        StandElf::new(19, "Pnut", Pnut.1, 280, 20, 70, Pnut.0,4, Pnut.2),
+        StandElf::new(20, "Pnut", Pnut.1, 300, 30, 70, Pnut.0,5, Pnut.2),
 
         // Popcat
-        StandElf::new(21, "Popcat", 15000, 80, 5, 100, 5,1, 15000),
-        StandElf::new(22, "Popcat", 15000, 160,  10, 100, 5,2, 15000),
-        StandElf::new(23, "Popcat", 15000, 210,  15, 100, 5,3, 15000),
-        StandElf::new(24, "Popcat", 15000, 280, 20, 100, 5,4, 15000),
-        StandElf::new(25, "Popcat", 15000, 300, 30, 100, 5,5, 15000),
+        StandElf::new(21, "Popcat", Popcat.1, 80, 5, 100, Popcat.0,1, Popcat.2),
+        StandElf::new(22, "Popcat", Popcat.1, 160,  10, 100, Popcat.0,2, Popcat.2),
+        StandElf::new(23, "Popcat", Popcat.1, 210,  15, 100, Popcat.0,3, Popcat.2),
+        StandElf::new(24, "Popcat", Popcat.1, 280, 20, 100, Popcat.0,4, Popcat.2),
+        StandElf::new(25, "Popcat", Popcat.1, 300, 30, 100, Popcat.0,5, Popcat.2),
 
         // Brett
-        StandElf::new(26, "Brett", 37500, 80, 5, 120, 6,1, 37500),
-        StandElf::new(27, "Brett", 37500, 160,  10, 120, 6,2, 37500),
-        StandElf::new(28, "Brett", 37500, 210,  15, 120, 6,3, 37500),
-        StandElf::new(29, "Brett", 37500, 280, 20, 120, 6,4, 37500),
-        StandElf::new(30, "Brett", 37500, 300, 30, 120, 6,5, 37500),
+        StandElf::new(26, "Brett", Brett.1, 80, 5, 120, Brett.0,1, Brett.2),
+        StandElf::new(27, "Brett", Brett.1, 160,  10, 120, Brett.0,2, Brett.2),
+        StandElf::new(28, "Brett", Brett.1, 210,  15, 120, Brett.0,3, Brett.2),
+        StandElf::new(29, "Brett", Brett.1, 280, 20, 120, Brett.0,4, Brett.2),
+        StandElf::new(30, "Brett", Brett.1, 300, 30, 120, Brett.0,5, Brett.2),
 
         // Wif
-        StandElf::new(31, "Wif", 93750, 80, 5, 150, 7,1, 93750),
-        StandElf::new(32, "Wif", 93750, 160,  10, 150, 7,2, 93750),
-        StandElf::new(33, "Wif", 93750, 210,  15, 150, 7,3, 93750),
-        StandElf::new(34, "Wif", 93750, 280, 20, 150, 7,4, 93750),
-        StandElf::new(35, "Wif", 93750, 300, 30, 150, 7,5, 93750),
+        StandElf::new(31, "Wif", Wif.1, 80, 5, 150, Wif.0,1, Wif.2),
+        StandElf::new(32, "Wif", Wif.1, 160,  10, 150, Wif.0,2, Wif.2),
+        StandElf::new(33, "Wif", Wif.1, 210,  15, 150, Wif.0,3, Wif.2),
+        StandElf::new(34, "Wif", Wif.1, 280, 20, 150, Wif.0,4, Wif.2),
+        StandElf::new(35, "Wif", Wif.1, 300, 30, 150, Wif.0,5, Wif.2),
 
         // Bonk
-        StandElf::new(36, "Bonk", 152000, 80, 5, 190, 8,1, 152000),
-        StandElf::new(37, "Bonk", 152000, 160,  10, 190, 8,2, 152000),
-        StandElf::new(38, "Bonk", 152000, 210,  15, 190, 8,3, 152000),
-        StandElf::new(39, "Bonk", 152000, 280, 20, 190, 8,4, 152000),
-        StandElf::new(40, "Bonk", 152000, 300, 30, 190, 8,5, 152000),
+        StandElf::new(36, "Bonk", Bonk.1, 80, 5, 190, Bonk.0,1, Bonk.2),
+        StandElf::new(37, "Bonk", Bonk.1, 160,  10, 190, Bonk.0,2, Bonk.2),
+        StandElf::new(38, "Bonk", Bonk.1, 210,  15, 190, Bonk.0,3, Bonk.2),
+        StandElf::new(39, "Bonk", Bonk.1, 280, 20, 190, Bonk.0,4, Bonk.2),
+        StandElf::new(40, "Bonk", Bonk.1, 300, 30, 190, Bonk.0,5, Bonk.2),
 
         // Pepe
-        StandElf::new(41, "Pepe", 220000, 80, 5, 230, 9,1, 220000),
-        StandElf::new(42, "Pepe", 220000, 160,  10, 230, 9,2, 220000),
-        StandElf::new(43, "Pepe", 220000, 210,  15, 230, 9,3, 220000),
-        StandElf::new(44, "Pepe", 220000, 280, 20, 230, 9,4, 220000),
-        StandElf::new(45, "Pepe", 220000, 300, 30, 230, 9,5, 220000),
+        StandElf::new(41, "Pepe", Pepe.1, 80, 5, 230, Pepe.0,1, Pepe.2),
+        StandElf::new(42, "Pepe", Pepe.1, 160,  10, 230, Pepe.0,2, Pepe.2),
+        StandElf::new(43, "Pepe", Pepe.1, 210,  15, 230, Pepe.0,3, Pepe.2),
+        StandElf::new(44, "Pepe", Pepe.1, 280, 20, 230, Pepe.0,4, Pepe.2),
+        StandElf::new(45, "Pepe", Pepe.1, 300, 30, 230, Pepe.0,5, Pepe.2),
 
         // Doge
-        StandElf::new(46, "Doge", 300000, 80, 5, 270, 10,1, 300000),
-        StandElf::new(47, "Doge", 300000, 160,  10, 270, 10,2, 300000),
-        StandElf::new(48, "Doge", 300000, 210,  15, 270, 10,3, 300000),
-        StandElf::new(49, "Doge", 300000, 280, 20, 270, 10,4, 300000),
-        StandElf::new(50, "Doge", 300000, 300, 30, 270, 10,5, 300000),
+        StandElf::new(46, "Doge", Doge.1, 80, 5, 270, Doge.0,1, Doge.2),
+        StandElf::new(47, "Doge", Doge.1, 160,  10, 270, Doge.0,2, Doge.2),
+        StandElf::new(48, "Doge", Doge.1, 210,  15, 270, Doge.0,3, Doge.2),
+        StandElf::new(49, "Doge", Doge.1, 280, 20, 270, Doge.0,4, Doge.2),
+        StandElf::new(50, "Doge", Doge.1, 300, 30, 270, Doge.0,5, Doge.2),
     ];
 
     pub static ref DEFAULT_STAND_ELF_RANDOM : Vec<ElfGradeRandom> = vec![

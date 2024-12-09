@@ -25,6 +25,7 @@ pub struct Config {
 }
 
 /* bounty info
+
  *
  * 20 * bounty_cost_base ^ redeem_info can used to replace bounty_reward_base * (redeem_info + 1) resource
  */

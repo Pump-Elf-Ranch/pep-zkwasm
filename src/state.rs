@@ -1,4 +1,3 @@
-use crate::config::ADMIN_PUBKEY;
 use crate::error::*;
 use crate::events::Event;
 use crate::player::ElfPlayer;
@@ -6,13 +5,13 @@ use sha2::Digest;
 use std::cell::RefCell;
 
 use crate::elf::Elf;
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::ranch::Ranch;
 use lazy_static::lazy_static;
-use zkwasm_rest_abi::{Player, StorageData};
+use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
-use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -26,7 +25,6 @@ fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S
         seq.end()
     }
 */
-
 
 pub struct Transaction {
     pub command: u64,
@@ -46,10 +44,8 @@ const SELL_ELF: u64 = 6; // 卖出精灵
 const WITHDRAW: u64 = 7; // 充值
 const DEPOSIT: u64 = 8; // 提现
 const BOUNTY: u64 = 9;
-const BUY_RANCH: u64 = 10;
-
-
-
+const BUY_RANCH: u64 = 10; // 购买牧场
+const COLLECT_GOLD: u64 = 11; // 收集金币
 
 impl Transaction {
     pub fn decode_error(e: u32) -> &'static str {
@@ -59,6 +55,10 @@ impl Transaction {
             ERROR_NOT_GOLD_BALANCE => "NotGoldBalance",
             ERROR_INDEX_OUT_OF_BOUND => "IndexOutofBound",
             ERROR_NOT_ENOUGH_RESOURCE => "NotEnoughResource",
+            ERROR_NOT_FOUND_RANCH => "NotFoundRanch",
+            ERROR_MAX_ELF => "MaxElfCount",
+            ERROR_NOT_FOUND_ELF => "NotFoundElf",
+            ERROR_INVALID_PURCHASE_CONDITION => "InvalidPurchaseCondition",
             _ => "Unknown",
         }
     }
@@ -84,6 +84,8 @@ impl Transaction {
             data,
         }
     }
+
+    // 初始化用户
     pub fn install_player(&self, pid: &[u64; 2]) -> Result<(), u32> {
         let player = ElfPlayer::get_from_pid(pid);
         match player {
@@ -103,39 +105,106 @@ impl Transaction {
         }
     }
 
+    // 购买精灵
     pub fn buy_elf(&self, pid: &[u64; 2], rand: u64) -> Result<(), u32> {
-        let mut player = ElfPlayer::get_from_pid(pid).unwrap();
-        player.check_and_inc_nonce(self.nonce);
-        // 获取牧场id
-        let ranch_id = self.data[0];
-        // todo 判断金额是否够，根据类型判断是否符合购买条件，
-        // todo 减少用户的金额
-        // 获取当前牧场的宠物数量
-        if let Some(elfs_count) = player.data.get_elf_len(ranch_id)
-        {
-            zkwasm_rust_sdk::dbg!("elfs_count {:?}\n", elfs_count);
-            if elfs_count == 10 {
-                return Err(ERROR_MAX_ELF);
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                // 获取牧场id
+                let ranch_id = self.data[0];
+                let elf_type = self.data[1];
+                if let Some(elfs_count) = player.data.get_elf_len(ranch_id) {
+                    zkwasm_rust_sdk::dbg!("elfs_count {:?}\n", elfs_count);
+                    if elfs_count == 10 {
+                        return Err(ERROR_MAX_ELF);
+                    }
+                    // 根据类型判断是否符合购买条件，并返回价格
+                    let can_buy = Elf::check_can_buy_elf(pid, ranch_id, elf_type);
+                    if can_buy.is_err() {
+                        return Err(ERROR_INVALID_PURCHASE_CONDITION);
+                    }
+                    // 获取购买价格
+                    let buy_price = can_buy.unwrap();
+                    zkwasm_rust_sdk::dbg!("buy_price {:?}\n", buy_price);
+                    let gold_balance = player.data.gold_balance;
+                    zkwasm_rust_sdk::dbg!("gold_balance {:?}\n", gold_balance);
+                    //  判断金额是否够
+                    if gold_balance < buy_price {
+                        return Err(ERROR_NOT_GOLD_BALANCE);
+                    }
+
+                    // 减少用户的金额
+                    player.data.gold_balance -= buy_price;
+                    // 获取当前牧场的宠物数量
+                    // 保存新宠物到牧场
+                    let new_elf = Elf::get_elf(rand, elf_type, elfs_count);
+                    let elf_id = new_elf.id;
+                    zkwasm_rust_sdk::dbg!("elf_id is {:?}\n", elf_id);
+                    player.data.set_elf_by_ranch(ranch_id, new_elf);
+                    player.store();
+                    // 初始化宠物事件
+                    self.init_event(*pid, ranch_id, elf_id);
+                    zkwasm_rust_sdk::dbg!("buy elf \n");
+                    Ok(())
+                } else {
+                    Err(ERROR_NOT_FOUND_RANCH)
+                }
             }
-            let elf_type = self.data[1];
-            // 保存新宠物到牧场
-            let new_elf = Elf::get_elf(rand, elf_type, elfs_count);
-            let elf_id = new_elf.id;
-            zkwasm_rust_sdk::dbg!("elf_id is {:?}\n", elf_id);
-            player.data.set_elf_by_ranch(ranch_id, new_elf);
-            player.store();
-            // 初始化宠物事件
-            self.init_event(*pid, ranch_id, elf_id);
-            zkwasm_rust_sdk::dbg!("buy elf \n");
-            Ok(())
-        } else {
-            Err(ERROR_NOT_FOUND_RANCH)
         }
     }
 
+    // 收集金币，需要牧场id和精灵id
+    pub fn collect_gold(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                let ranch_id = self.data[0];
+                let elf_id = self.data[1];
+                let elf = player.data.get_elf_mut(ranch_id, elf_id);
+                if let Some(elf) = elf {
+                    let gold = elf.current_gold_store;
+                    elf.current_gold_store = 0;
+                    player.data.gold_balance += gold;
+                    player.data.gold_count += gold;
+                    player.store();
+                    Ok(())
+                } else {
+                    Err(ERROR_NOT_FOUND_ELF)
+                }
+            }
+        }
+    }
+
+    // 清洁牧场
+    pub fn clean_ranch (&self, pid: &[u64; 2])  -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                let ranch_id = self.data[0];
+                let ranch = player.data.get_ranch_mut(ranch_id);
+                if let Some(ranch) = ranch {
+                    if ranch.ranch_clean > 0 {
+                        ranch.ranch_clean = 0;
+                    }
+                    player.data.clean_count += 1;
+                    player.store();
+                    Ok(())
+                } else {
+                    Err(ERROR_NOT_FOUND_ELF)
+                }
+            }
+        }
+    }
+
+    // 初始化事件
     pub fn init_event(&self, player_id: [u64; 2], ranch_id: u64, elf_id: u64) {
         let mut state = STATE.0.borrow_mut();
-        // state.queue.insert()'
         self.init_add_exp_event(&mut state, &player_id, ranch_id, elf_id);
         self.init_health_reduce_event(&mut state, &player_id, ranch_id, elf_id);
         self.init_satiety_reduce_event(&mut state, &player_id, ranch_id, elf_id);
@@ -144,7 +213,13 @@ impl Transaction {
     }
 
     // 初始化添加金币事件
-    pub fn init_add_gold_event(&self,mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+    pub fn init_add_gold_event(
+        &self,
+        mut state: &mut State,
+        pid: &[u64; 2],
+        ranch_id: u64,
+        elf_id: u64,
+    ) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
@@ -156,7 +231,13 @@ impl Transaction {
     }
 
     // 初始化添加经验的事件
-    pub fn init_add_exp_event(&self, mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+    pub fn init_add_exp_event(
+        &self,
+        mut state: &mut State,
+        pid: &[u64; 2],
+        ranch_id: u64,
+        elf_id: u64,
+    ) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
@@ -168,7 +249,13 @@ impl Transaction {
     }
 
     // 初始化减少健康值的事件
-    pub fn init_health_reduce_event(&self, mut state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+    pub fn init_health_reduce_event(
+        &self,
+        mut state: &mut State,
+        pid: &[u64; 2],
+        ranch_id: u64,
+        elf_id: u64,
+    ) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
@@ -180,7 +267,13 @@ impl Transaction {
     }
 
     // 初始化减少饱食度事件
-    pub fn init_satiety_reduce_event(&self, state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+    pub fn init_satiety_reduce_event(
+        &self,
+        state: &mut State,
+        pid: &[u64; 2],
+        ranch_id: u64,
+        elf_id: u64,
+    ) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
@@ -192,27 +285,39 @@ impl Transaction {
     }
 
     // 初始化污染度增加事件
-    pub fn init_add_shit_event(&self, state: &mut State, pid: &[u64; 2], ranch_id: u64, elf_id: u64) {
+    pub fn init_add_shit_event(
+        &self,
+        state: &mut State,
+        pid: &[u64; 2],
+        ranch_id: u64,
+        elf_id: u64,
+    ) {
         // 给新的宠物添加事件
         state.queue.insert(Event {
             owner: *pid,
             event_type: ADD_SHIT,
             ranch_id,
             elf_id,
-            delta: (60/5) * 3, // 5秒一次tick，每3分钟增加shit
+            delta: (60 / 5) * 3, // 5秒一次tick，每3分钟增加shit
         });
     }
 
+    // 游戏进程
     pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
-        zkwasm_rust_sdk::dbg!("rand {:?}\n", {sigr});
+        zkwasm_rust_sdk::dbg!("rand {:?}\n", { sigr });
         let rand = sigr[0] ^ sigr[1] ^ sigr[2] ^ sigr[3];
         let b = match self.command {
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
-            BUY_ELF =>
-                self.buy_elf(&ElfPlayer::pkey_to_pid(&pkey), rand)
-                    .map_or_else(|e| e, |_| 0),
+            BUY_ELF => self
+                .buy_elf(&ElfPlayer::pkey_to_pid(&pkey), rand)
+                .map_or_else(|e| e, |_| 0),
+            COLLECT_GOLD => self
+                .collect_gold(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            CLEAN_RANCH => self.clean_ranch(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
@@ -233,12 +338,10 @@ lazy_static::lazy_static! {
     pub static ref STATE: SafeState = SafeState (RefCell::new(State::new()));
 }
 
-
 pub struct State {
     supplier: u64,
     queue: EventQueue<Event>,
 }
-
 
 impl State {
     pub fn new() -> Self {
@@ -266,28 +369,13 @@ impl State {
     }
 
     pub fn flush_settlement() -> Vec<u8> {
-        // let mut state = STATE.0.borrow_mut();
-        // let counter = state.queue.counter;
-
         SettlementInfo::flush_settlement()
-        // {
-        //     let mut state = STATE.0.borrow_mut(); // 获取 `State` 的可变引用
-        //     state.queue.store(); // 调用 `State` 的 `store` 方法
-        // }
-        // data
-        // state.queue.counter = counter;
     }
 
     pub fn rand_seed() -> u64 {
         0
     }
-    pub fn settle(&mut self, rand: u64) {
-        // for game in self.games.iter_mut() {
-        //     let final_rand = game.rand ^ rand;
-        //     game.settle(final_rand);
-        // }
-        // self.games = vec![];
-    }
+    pub fn settle(&mut self, rand: u64) {}
 
     pub fn store() {
         let mut state = STATE.0.borrow_mut();

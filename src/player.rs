@@ -64,10 +64,7 @@ impl PlayerData {
         }
     }
 
-    // 收集金币
-    pub fn collect_gold() -> Option<Event> {
-        None
-    }
+
 
     // 宠物增加经验
     pub fn elf_add_exp_event(

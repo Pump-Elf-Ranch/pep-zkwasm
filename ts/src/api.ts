@@ -28,11 +28,9 @@ function addrToParams(bn: BN): Array<bigint> {
 
 const CMD_INSTALL_PLAYER = 1n;
 const CMD_BUY_ELF = 2n;
-const CMD_RESTART_OBJECT = 3n;
-const CMD_UPGRADE_OBJECT = 4n;
-const CMD_INSTALL_CARD = 5n;
-const CMD_WITHDRAW= 6n;
-const CMD_DEPOSIT = 7n;
+const CMD_CLEAN_RANCH = 4n;
+const CMD_COLLECT_GOLD = 11n;
+const CMD_WITHDRAW = 7n;
 
 function createCommand(nonce: bigint, command: bigint, objindex: bigint) {
   return (nonce << 16n) + (objindex << 8n) + command;
@@ -85,12 +83,46 @@ export class Player {
     }
   }
 
-  async buy_elf(objid: bigint, ranch_id: bigint,elf_type:bigint) {
+  async collectGold(ranch_id: bigint, elf_id: bigint) {
     let nonce = await this.getNonce();
     console.log("nonce :",nonce)
     try {
       let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_BUY_ELF, objid), ranch_id, elf_type, 0n]),
+          new BigUint64Array([createCommand(nonce, CMD_COLLECT_GOLD, 0n), ranch_id, elf_id, 0n]),
+          this.processingKey
+      );
+      console.log("collectGold processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("collectGold error at processing key:", this.processingKey);
+    }
+  }
+
+  async cleanRanch(ranch_id: bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+          new BigUint64Array([createCommand(nonce, CMD_CLEAN_RANCH, 0n), ranch_id, 0n, 0n]),
+          this.processingKey
+      );
+      console.log("cleanRanch processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("cleanRanch error at processing key:", this.processingKey);
+    }
+  }
+
+  async buy_elf( ranch_id: bigint,elf_type:bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+        new BigUint64Array([createCommand(nonce, CMD_BUY_ELF, 0n), ranch_id, elf_type, 0n]),
         this.processingKey
       );
       console.log("buy_elf processed at:", finished);
@@ -102,73 +134,15 @@ export class Player {
     }
   }
 
-  async restartObject(objid: bigint, modifiers: Array<bigint>) {
-    let nonce = await this.getNonce();
-    try {
-      let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_RESTART_OBJECT, objid), encode_modifier(modifiers), 0n, 0n]),
-        this.processingKey
-      );
-      console.log("restartObject processed at:", finished);
-    } catch(e) {
-      if(e instanceof Error) {
-        console.log(e);
-        console.log(e.message);
-      }
-      console.log("restart object error", "processing key:", this.processingKey);
-    }
-  }
-
-  async upgradeObject(objid: bigint) {
-    let nonce = await this.getNonce();
-    try {
-      let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_UPGRADE_OBJECT, objid), 0n, 0n, 0n]),
-        this.processingKey
-      );
-      console.log("upgradeObject processed at:", finished);
-    } catch(e) {
-      if(e instanceof Error) {
-        console.log(e.message);
-      }
-      console.log("upgrade object error", "processing key:", this.processingKey);
-    }
-  }
 
 
 
-  async installCard() {
-    let nonce = await this.getNonce();
-    try {
-      let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_INSTALL_CARD, 0n), 0n, 0n, 0n]),
-        this.processingKey
-      );
-      console.log("installCard processed at:", finished);
-    } catch(e) {
-      if(e instanceof Error) {
-        console.log(e.message);
-      }
-      console.log("installCard error with processing key:", this.processingKey);
-    }
-  }
 
-  async deposit() {
-    let nonce = await this.getNonce();
-    let accountInfo = new LeHexBN(query(this.processingKey).pkx).toU64Array();
-    try {
-      let finished = await rpc.sendTransaction(
-        new BigUint64Array([createCommand(nonce, CMD_DEPOSIT, 0n), accountInfo[1], accountInfo[2], 1000n]),
-        this.processingKey
-      );
-      console.log("deposit processed at:", finished);
-    } catch(e) {
-      if(e instanceof Error) {
-        console.log(e.message);
-      }
-      console.log("deposit error at processing key:", this.processingKey);
-    }
-  }
+
+
+
+
+
 
   async withdrawRewards(address: string, amount: bigint) {
     let nonce = await this.getNonce();
