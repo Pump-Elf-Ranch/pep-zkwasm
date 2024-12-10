@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y \
 # Install supervisor
 RUN apt-get update && apt-get install -y supervisor && apt-get clean
 
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+
 # Set the working directory inside the container
 WORKDIR /usr/src/zkwasm-app
 
