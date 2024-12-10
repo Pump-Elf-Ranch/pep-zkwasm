@@ -23,14 +23,14 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_ALIL_USERNAME }}
           password: ${{ secrets.DOCKER_ALIL_PASSWORD }}
-          registry: "registry.cn-hongkong.aliyuncs.com"
+          registry: "registry.ap-northeast-1.aliyuncs.com"
 
       - name: Build and push Docker image
         env:
           COMMIT_SHA: ${{ steps.get-commit-sha.outputs.sha }}
 
         run: |
-          IMAGE_URL="registry.cn-hongkong.aliyuncs.com/pep/pep-zkwasm:${COMMIT_SHA}"
+          IMAGE_URL="registry.ap-northeast-1.aliyuncs.com//omni-new/per-zkwasm-server:${COMMIT_SHA}"
           echo $IMAGE_URL
           docker build -t ${IMAGE_URL} -f deploy/service.docker .
           docker push ${IMAGE_URL}
