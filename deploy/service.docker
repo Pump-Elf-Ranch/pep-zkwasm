@@ -1,5 +1,34 @@
 # Use the official Rust image from the Docker Hub
-FROM registry.cn-hongkong.aliyuncs.com/omni-new/zk-new-base:1.0.0
+FROM rust:latest
+# Install Node.js 18.6
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs=18.6.0-1nodesource1
+
+# Install Git
+RUN apt-get update && apt-get install -y git
+
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    libclang-dev \
+    curl
+
+# Install supervisor
+RUN apt-get update && apt-get install -y supervisor && apt-get clean
+
+# Insell wasm-pack
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+# Install wasm-opt
+RUN curl -L https://github.com/WebAssembly/binaryen/releases/download/version_118/binaryen-version_118-x86_64-linux.tar.gz \
+            -o binaryen.tar.gz  \
+            && tar -xzf binaryen.tar.gz \
+            && mv binaryen-version_118/bin/wasm-opt /usr/local/bin/ \
+            && rm -rf binaryen.tar.gz binaryen-version_118
 
 
 # Set the working directory inside the container
