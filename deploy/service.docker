@@ -1,26 +1,5 @@
 # Use the official Rust image from the Docker Hub
-FROM rust:latest
-# Install Node.js 18.6
-RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs=18.6.0-1nodesource1
-
-# Install Git
-RUN apt-get update && apt-get install -y git
-
-RUN apt-get update && apt-get install -y \
-    git \
-    cmake \
-    pkg-config \
-    libssl-dev \
-    libclang-dev \
-    curl
-
-# Install supervisor
-RUN apt-get update && apt-get install -y supervisor && apt-get clean
-
-RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+FROM registry.cn-hongkong.aliyuncs.com/omni-new/zk-new-base:1.0.0
 
 
 # Set the working directory inside the container
@@ -34,7 +13,6 @@ RUN npm install
 
 WORKDIR /usr/src/zkwasm-app
 
-RUN cargo +nightly-2023-06-01 install wasm-opt --locked
 
 RUN make
 
