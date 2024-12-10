@@ -30,7 +30,7 @@ jobs:
           COMMIT_SHA: ${{ steps.get-commit-sha.outputs.sha }}
 
         run: |
-          IMAGE_URL="registry.ap-northeast-1.aliyuncs.com//omni-new/per-zkwasm-server:${COMMIT_SHA}"
+          IMAGE_URL="registry.ap-northeast-1.aliyuncs.com/omni-new/per-zkwasm-server:${COMMIT_SHA}"
           echo $IMAGE_URL
           docker build -t ${IMAGE_URL} -f deploy/service.docker .
           docker push ${IMAGE_URL}
