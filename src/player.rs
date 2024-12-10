@@ -7,6 +7,7 @@ use crate::StorageData;
 use crate::{ranch, Player};
 use serde::Serialize;
 use std::slice::IterMut;
+use crate::state::State;
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
@@ -263,7 +264,7 @@ impl PlayerData {
         ranch_id: u64,
         elf_id: u64,
     ) -> Option<Event> {
-        match event_type {
+        let event = match event_type {
             ADD_EXP => self.elf_add_exp_event(player_id, event_type, ranch_id, elf_id),
             ADD_GOLD => self.elf_add_gold_event(player_id, event_type, ranch_id, elf_id),
             HEALTH_REDUCE => self.elf_health_reduce_event(player_id, event_type, ranch_id, elf_id),
@@ -272,7 +273,8 @@ impl PlayerData {
             }
             ADD_SHIT => self.add_shit_event(player_id, event_type, ranch_id, elf_id),
             _ => None,
-        }
+        };
+        event
     }
 }
 

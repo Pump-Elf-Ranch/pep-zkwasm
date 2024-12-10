@@ -3,7 +3,6 @@ use crate::events::Event;
 use crate::player::ElfPlayer;
 use sha2::Digest;
 use std::cell::RefCell;
-
 use crate::elf::Elf;
 use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::ranch::Ranch;
@@ -144,6 +143,7 @@ impl Transaction {
                     zkwasm_rust_sdk::dbg!("elf_id is {:?}\n", elf_id);
                     player.data.set_elf_by_ranch(ranch_id, new_elf);
                     player.store();
+                    zkwasm_rust_sdk::dbg!("init_event start\n");
                     // 初始化宠物事件
                     self.init_event(*pid, ranch_id, elf_id);
                     zkwasm_rust_sdk::dbg!("buy elf \n");
@@ -171,6 +171,8 @@ impl Transaction {
                     player.data.gold_balance += gold;
                     player.data.gold_count += gold;
                     player.store();
+                    // 初始化宠物事件
+                    self.init_event(*pid, ranch_id, elf_id);
                     Ok(())
                 } else {
                     Err(ERROR_NOT_FOUND_ELF)
@@ -190,10 +192,14 @@ impl Transaction {
                 let ranch = player.data.get_ranch_mut(ranch_id);
                 if let Some(ranch) = ranch {
                     if ranch.ranch_clean > 0 {
+                        let elfs = ranch.clone().elfs;
                         ranch.ranch_clean = 0;
+                        player.data.clean_count += 1;
+                        player.store();
+                        for elf in elfs {
+                            self.init_event(*pid, ranch_id, elf.id);
+                        }
                     }
-                    player.data.clean_count += 1;
-                    player.store();
                     Ok(())
                 } else {
                     Err(ERROR_NOT_FOUND_ELF)
@@ -221,13 +227,17 @@ impl Transaction {
         elf_id: u64,
     ) {
         // 给新的宠物添加事件
-        state.queue.insert(Event {
+        let event = Event {
             owner: *pid,
             event_type: ADD_GOLD,
             ranch_id,
             elf_id,
             delta: 1,
-        });
+        };
+        let is_exits = state.queue.list.contains(&event);
+        if !is_exits {
+            state.queue.insert(event);
+        }
     }
 
     // 初始化添加经验的事件
@@ -239,13 +249,18 @@ impl Transaction {
         elf_id: u64,
     ) {
         // 给新的宠物添加事件
-        state.queue.insert(Event {
+        let event = Event {
             owner: *pid,
             event_type: ADD_EXP,
             ranch_id,
             elf_id,
             delta: 1,
-        });
+        };
+        let is_exits = state.queue.list.contains(&event);
+        if !is_exits {
+            state.queue.insert(event);
+        }
+
     }
 
     // 初始化减少健康值的事件
@@ -257,13 +272,17 @@ impl Transaction {
         elf_id: u64,
     ) {
         // 给新的宠物添加事件
-        state.queue.insert(Event {
+        let event = Event {
             owner: *pid,
             event_type: HEALTH_REDUCE,
             ranch_id,
             elf_id,
             delta: 1, // 5秒一次tick， 每分钟减少健康度
-        });
+        };
+        let is_exits = state.queue.list.contains(&event);
+        if !is_exits {
+            state.queue.insert(event);
+        }
     }
 
     // 初始化减少饱食度事件
@@ -275,13 +294,17 @@ impl Transaction {
         elf_id: u64,
     ) {
         // 给新的宠物添加事件
-        state.queue.insert(Event {
+        let event = Event {
             owner: *pid,
             event_type: SATIETY_REDUCE,
             ranch_id,
             elf_id,
             delta: 1, // 5秒一次tick，每小时减少饱食度
-        });
+        };
+        let is_exits = state.queue.list.contains(&event);
+        if !is_exits {
+            state.queue.insert(event);
+        }
     }
 
     // 初始化污染度增加事件
@@ -293,13 +316,17 @@ impl Transaction {
         elf_id: u64,
     ) {
         // 给新的宠物添加事件
-        state.queue.insert(Event {
+        let event = Event {
             owner: *pid,
             event_type: ADD_SHIT,
             ranch_id,
             elf_id,
             delta: (60 / 5) * 3, // 5秒一次tick，每3分钟增加shit
-        });
+        };
+        let is_exits = state.queue.list.contains(&event);
+        if !is_exits {
+            state.queue.insert(event);
+        }
     }
 
     // 游戏进程
@@ -321,7 +348,7 @@ impl Transaction {
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
-                let event_count = STATE.0.borrow_mut().queue.list.len();
+                let event_count = STATE.0.borrow().queue.list.len();
                 zkwasm_rust_sdk::dbg!("eventCount {:?}\n", event_count);
                 STATE.0.borrow_mut().queue.tick();
                 0
@@ -340,7 +367,7 @@ lazy_static::lazy_static! {
 
 pub struct State {
     supplier: u64,
-    queue: EventQueue<Event>,
+    queue: EventQueue<Event>
 }
 
 impl State {
@@ -376,6 +403,13 @@ impl State {
         0
     }
     pub fn settle(&mut self, rand: u64) {}
+
+
+    pub fn hash_event_contains(event: Event) ->  bool {
+        let state = STATE.0.borrow();
+        let x = state.queue.list.contains(&event);
+        x
+    }
 
     pub fn store() {
         let mut state = STATE.0.borrow_mut();

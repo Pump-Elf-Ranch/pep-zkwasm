@@ -12,6 +12,16 @@ pub struct Event {
     pub delta: usize,
 }
 
+impl PartialEq for Event {
+    fn eq(&self, other: &Self) -> bool {
+        self.owner == other.owner
+            && self.event_type == other.event_type
+            && self.ranch_id == other.ranch_id
+            && self.elf_id == other.elf_id
+    }
+}
+
+
 impl StorageData for Event {
     fn to_data(&self, buf: &mut Vec<u64>) {
         buf.push(self.owner[0]);
