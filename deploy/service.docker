@@ -34,6 +34,8 @@ RUN npm install
 
 WORKDIR /usr/src/zkwasm-app
 
+RUN cargo +nightly-2023-06-01 install wasm-opt --locked
+
 RUN make
 
 WORKDIR /usr/src
