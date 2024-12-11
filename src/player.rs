@@ -65,11 +65,23 @@ impl PlayerData {
     // 指定牧场，添加道具
     pub fn set_prop_by_ranch(&mut self,ranch_id: u64, user_prop: UserProp) {
         if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
-            ranch.props.push(user_prop);
-            zkwasm_rust_sdk::dbg!("save prop! \n");
+            if let Some(prop) = ranch.props.iter_mut().find(|p| p.prop_type == user_prop.prop_type) {
+                prop.count += 1;
+                zkwasm_rust_sdk::dbg!("add prop! \n");
+                return;
+            } else {
+                ranch.props.push(user_prop);
+                zkwasm_rust_sdk::dbg!("save prop! \n");
+            }
         }
     }
 
+    pub fn set_prop_by_type(&mut self,ranch_id: u64, prop_type: u64) -> Option<& mut UserProp> {
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            ranch.props.iter_mut().find(|p| p.prop_type == prop_type);
+        }
+        None
+    }
 
 
     // 宠物增加经验
