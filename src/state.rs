@@ -165,12 +165,12 @@ impl Transaction {
                 let elf_id = self.data[1];
                 let elf = player.data.get_elf_mut(ranch_id, elf_id);
                 if let Some(elf) = elf {
-                    let elf_event = elf.clone();
                     let gold = elf.current_gold_store;
                     elf.current_gold_store = 0;
                     player.data.gold_balance += gold;
                     player.data.gold_count += gold;
                     player.store();
+                    let elf_event = elf.clone();
                     // 初始化宠物事件
                     self.init_event(*pid, ranch_id, elf_event);
                     Ok(())
