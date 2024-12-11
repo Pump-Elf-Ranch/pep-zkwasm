@@ -11,3 +11,7 @@ pub const ERROR_MAX_ELF: u32 = 7;
 pub const ERROR_INVALID_PURCHASE_CONDITION: u32 = 8;
 
 pub const ERROR_NOT_FOUND_ELF: u32 = 9;
+
+pub const ERROR_NOT_FOUND_PROP: u32 = 10;
+
+pub const  ERROR_THIS_PROP_MUST_BE_USED_USDT: u32 = 11;

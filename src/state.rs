@@ -11,6 +11,7 @@ use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
+use crate::prop::{price_type_gold, Prop, UserProp};
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -46,6 +47,8 @@ const BOUNTY: u64 = 9;
 const BUY_RANCH: u64 = 10; // 购买牧场
 const COLLECT_GOLD: u64 = 11; // 收集金币
 
+const BUY_PROP: u64 = 12; // 购买道具
+
 impl Transaction {
     pub fn decode_error(e: u32) -> &'static str {
         match e {
@@ -57,6 +60,8 @@ impl Transaction {
             ERROR_NOT_FOUND_RANCH => "NotFoundRanch",
             ERROR_MAX_ELF => "MaxElfCount",
             ERROR_NOT_FOUND_ELF => "NotFoundElf",
+            ERROR_NOT_FOUND_PROP => "NotFoundProp",
+            ERROR_THIS_PROP_MUST_BE_USED_USDT => "ThisPropMustBeUsedUSDT",
             ERROR_INVALID_PURCHASE_CONDITION => "InvalidPurchaseCondition",
             _ => "Unknown",
         }
@@ -116,7 +121,8 @@ impl Transaction {
                 let elf_type = self.data[1];
                 if let Some(elfs_count) = player.data.get_elf_len(ranch_id) {
                     zkwasm_rust_sdk::dbg!("elfs_count {:?}\n", elfs_count);
-                    if elfs_count == 10 {
+                    let elf_slot = player.data.get_ranch_mut(ranch_id).unwrap().elf_slot;
+                    if elfs_count == elf_slot {
                         return Err(ERROR_MAX_ELF);
                     }
                     // 根据类型判断是否符合购买条件，并返回价格
@@ -150,6 +156,43 @@ impl Transaction {
                 } else {
                     Err(ERROR_NOT_FOUND_RANCH)
                 }
+            }
+        }
+    }
+
+    // 购买道具
+    pub fn buy_prop(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                // 获取牧场id
+                let ranch_id = self.data[0];
+                let prop_type = self.data[1];
+                {
+                    let ranch = player.data.get_ranch_mut(ranch_id);
+                    if ranch.is_none() {
+                        return Err(ERROR_NOT_FOUND_RANCH);
+                    }
+                }
+                if let Some(prop) = Prop::get_prop_by_type(prop_type){
+                    if prop.price_type == price_type_gold {
+                        let gold_balance = player.data.gold_balance;
+                        if gold_balance < prop.price {
+                            return Err(ERROR_NOT_GOLD_BALANCE);
+                        }
+                        player.data.gold_balance -= prop.price;
+                        let user_prop = UserProp::new(prop.prop_type);
+                        player.data.set_prop_by_ranch(ranch_id, user_prop);
+                        player.store();
+                    } else {
+                        return Err(ERROR_THIS_PROP_MUST_BE_USED_USDT);
+                    }
+                } else {
+                    return Err(ERROR_NOT_FOUND_PROP);
+                }
+                Ok(())
             }
         }
     }
@@ -352,6 +395,8 @@ impl Transaction {
                 .collect_gold(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             CLEAN_RANCH => self.clean_ranch(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            BUY_PROP => self.buy_prop(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };

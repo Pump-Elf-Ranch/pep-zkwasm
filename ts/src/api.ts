@@ -31,12 +31,12 @@ const CMD_BUY_ELF = 2n;
 const CMD_CLEAN_RANCH = 4n;
 const CMD_COLLECT_GOLD = 11n;
 const CMD_WITHDRAW = 7n;
-
+const CMD_PROP = 12n;
 function createCommand(nonce: bigint, command: bigint, objindex: bigint) {
   return (nonce << 16n) + (objindex << 8n) + command;
 }
 
-const rpc = new ZKWasmAppRpc("https://zk-server.pumpelf.ai");
+const rpc = new ZKWasmAppRpc("http://127.0.0.1:3000");
 
 export class Player {
   processingKey: string;
@@ -134,6 +134,22 @@ export class Player {
     }
   }
 
+  async buy_prop( ranch_id: bigint,prop_type:bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+          new BigUint64Array([createCommand(nonce, CMD_PROP, 0n), ranch_id, prop_type, 0n]),
+          this.processingKey
+      );
+      console.log("buy_prop processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("buy_prop error at ranch_id:", ranch_id, "prop_type :", prop_type);
+    }
+  }
 
 
 

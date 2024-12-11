@@ -5,9 +5,7 @@ use serde::Serialize;
 use std::slice::IterMut;
 use std::str;
 use zkwasm_rest_abi::StorageData;
-use zkwasm_rust_sdk::PoseidonHasher;
 use crate::error::ERROR_INVALID_PURCHASE_CONDITION;
-// 导入 std::str 模块
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Elf {
@@ -86,6 +84,16 @@ impl Elf {
             x if x == Doge.0 => Elf::check_can_buy_doge(player, ranch_id),
             _ => Err(ERROR_INVALID_PURCHASE_CONDITION),
         }
+    }
+
+    // 获取所有精灵信息
+    pub fn get_all_elfs() -> &'static Vec<StandElf> {
+        &*DEFAULT_STAND_ELF
+    }
+
+    // 获取所有精灵信息
+    pub fn get_all_randoms() -> &'static Vec<ElfGradeRandom> {
+        &*DEFAULT_STAND_ELF_RANDOM
     }
 
     // 是否可以购买 Slerf
@@ -276,7 +284,7 @@ impl Elf {
             return 0;
         }
 
-        let left_health = 10000 - elf.health;
+        let left_health = elf.health;
         // 基础减少百分比
         let mut base_reduce: f64 = 1.0;
         // 如果牧场清洁度小于50%，基础减少百分比增加0.5
@@ -295,7 +303,7 @@ impl Elf {
         let need_reduce = (need_reduce / (60.0 / 5.0)).ceil() as u64;
         zkwasm_rust_sdk::dbg!("need_reduce2 is {:?}\n", need_reduce);
         // 如果计算出的每次需要的健康值超过剩余健康值，返回剩余健康值
-        if need_reduce > left_health && elf.health < 10000 {
+        if need_reduce > left_health {
             return left_health;
         }
         zkwasm_rust_sdk::dbg!("final is {:?}\n", need_reduce);
@@ -308,7 +316,7 @@ impl Elf {
         if elf.satiety == 0 {
             return 0;
         }
-        let left_satiety = 10000 - elf.satiety;
+        let left_satiety = elf.satiety;
         // 基础减少百分比
         let mut base_reduce: f64 = 2.0;
 
@@ -316,7 +324,7 @@ impl Elf {
         let need_reduce = (base_reduce / 100.0) * 10000.0;
         // 每5秒一次的tick, 所以每小时会执行12 * 60次，减少的饱食度需要 need_reduce /(60*60/5)
         let need_reduce = (need_reduce / (60.0 * 60.0 / 5.0)).ceil() as u64;
-        if need_reduce > left_satiety && elf.satiety < 10000 {
+        if need_reduce > left_satiety {
             return left_satiety;
         }
         // 返回需要减少的饱食度
@@ -375,6 +383,9 @@ impl Elf {
         }
         need_add.ceil() as u64
     }
+
+
+
 }
 
 impl StorageData for Elf {

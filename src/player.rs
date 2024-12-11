@@ -1,7 +1,7 @@
 use crate::elf::Elf;
 use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
-use crate::prop::Prop;
+use crate::prop::{Prop, UserProp};
 use crate::ranch::Ranch;
 use crate::StorageData;
 use crate::{ranch, Player};
@@ -15,7 +15,6 @@ pub struct PlayerData {
     pub clean_count: u64,   // 累计清洁次数
     pub feed_count: u64,    // 累计喂食次数
     pub gold_balance: u64,  // 金币余额
-    pub props: Vec<Prop>,   // 拥有的道具
     pub ranchs: Vec<Ranch>, // 拥有的牧场
 }
 
@@ -26,7 +25,6 @@ impl Default for PlayerData {
             clean_count: 0,
             feed_count: 0,
             gold_balance: 120, // 新用户默认给120个金币
-            props: vec![],
             ranchs: vec![],
         }
     }
@@ -59,9 +57,16 @@ impl PlayerData {
     // 指定牧场，添加宠物
     pub fn set_elf_by_ranch(&mut self, ranch_id: u64, elf: Elf) {
         if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
-            // 在该牧场的精灵列表中查找指定的精灵并返回可变引用
             ranch.elfs.push(elf);
             zkwasm_rust_sdk::dbg!("save elf! \n");
+        }
+    }
+
+    // 指定牧场，添加道具
+    pub fn set_prop_by_ranch(&mut self,ranch_id: u64, user_prop: UserProp) {
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            ranch.props.push(user_prop);
+            zkwasm_rust_sdk::dbg!("save prop! \n");
         }
     }
 
@@ -286,14 +291,6 @@ impl StorageData for PlayerData {
         let feed_count = *u64data.next().unwrap();
         let gold_balance = *u64data.next().unwrap();
 
-        // 读取道具数据
-        let props_count = *u64data.next().unwrap() as usize; // 读取道具数量
-        let mut props = Vec::with_capacity(props_count);
-        for _ in 0..props_count {
-            let prop = Prop::from_data(u64data); // 假设 Prop 类型也有 from_data 方法
-            props.push(prop);
-        }
-
         // 读取牧场的数据
         let ranchs_count = *u64data.next().unwrap() as usize; // 读取道具数量
         let mut ranchs = Vec::with_capacity(ranchs_count);
@@ -307,7 +304,6 @@ impl StorageData for PlayerData {
             clean_count,
             feed_count,
             gold_balance,
-            props,
             ranchs,
         }
     }
@@ -318,12 +314,6 @@ impl StorageData for PlayerData {
         data.push(self.clean_count);
         data.push(self.feed_count);
         data.push(self.gold_balance);
-
-        // 将道具数据推入数据流
-        data.push(self.props.len() as u64); // 先推入道具数量
-        for prop in &self.props {
-            prop.to_data(data); // 使用 Prop 的 to_data 方法将每个道具转回数据
-        }
 
         // 将牧场数据推入数据流
         data.push(self.ranchs.len() as u64); // 先推入牧场数量
