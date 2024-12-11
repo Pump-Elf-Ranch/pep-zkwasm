@@ -271,6 +271,11 @@ impl Elf {
 
     // 计算需要消耗的健康值
     pub fn compute_health_reduce(elf: Elf, ranch_clean: u64) -> u64 {
+
+        if elf.health == 0 {
+            return 0;
+        }
+
         let left_health = 10000 - elf.health;
         // 基础减少百分比
         let mut base_reduce: f64 = 1.0;
@@ -300,6 +305,9 @@ impl Elf {
 
     // 计算需要减少的饱食度
     pub fn compute_satiety_reduce(elf: Elf) -> u64 {
+        if elf.satiety == 0 {
+            return 0;
+        }
         let left_satiety = 10000 - elf.satiety;
         // 基础减少百分比
         let mut base_reduce: f64 = 2.0;

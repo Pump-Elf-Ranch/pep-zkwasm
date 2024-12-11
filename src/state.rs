@@ -139,13 +139,12 @@ impl Transaction {
                     // 获取当前牧场的宠物数量
                     // 保存新宠物到牧场
                     let new_elf = Elf::get_elf(rand, elf_type, elfs_count);
-                    let elf_id = new_elf.id;
-                    zkwasm_rust_sdk::dbg!("elf_id is {:?}\n", elf_id);
+                    let elf_event = new_elf.clone();
                     player.data.set_elf_by_ranch(ranch_id, new_elf);
                     player.store();
                     zkwasm_rust_sdk::dbg!("init_event start\n");
                     // 初始化宠物事件
-                    self.init_event(*pid, ranch_id, elf_id);
+                    self.init_event(*pid, ranch_id, elf_event);
                     zkwasm_rust_sdk::dbg!("buy elf \n");
                     Ok(())
                 } else {
@@ -166,13 +165,14 @@ impl Transaction {
                 let elf_id = self.data[1];
                 let elf = player.data.get_elf_mut(ranch_id, elf_id);
                 if let Some(elf) = elf {
+                    let elf_event = elf.clone();
                     let gold = elf.current_gold_store;
                     elf.current_gold_store = 0;
                     player.data.gold_balance += gold;
                     player.data.gold_count += gold;
                     player.store();
                     // 初始化宠物事件
-                    self.init_event(*pid, ranch_id, elf_id);
+                    self.init_event(*pid, ranch_id, elf_event);
                     Ok(())
                 } else {
                     Err(ERROR_NOT_FOUND_ELF)
@@ -182,7 +182,7 @@ impl Transaction {
     }
 
     // 清洁牧场
-    pub fn clean_ranch (&self, pid: &[u64; 2])  -> Result<(), u32> {
+    pub fn clean_ranch(&self, pid: &[u64; 2]) -> Result<(), u32> {
         let mut player = ElfPlayer::get_from_pid(pid);
         match player.as_mut() {
             None => Err(ERROR_PLAYER_NOT_EXIST),
@@ -197,7 +197,7 @@ impl Transaction {
                         player.data.clean_count += 1;
                         player.store();
                         for elf in elfs {
-                            self.init_event(*pid, ranch_id, elf.id);
+                            self.init_event(*pid, ranch_id, elf.clone());
                         }
                     }
                     Ok(())
@@ -209,13 +209,13 @@ impl Transaction {
     }
 
     // 初始化事件
-    pub fn init_event(&self, player_id: [u64; 2], ranch_id: u64, elf_id: u64) {
+    pub fn init_event(&self, player_id: [u64; 2], ranch_id: u64, elf: Elf) {
         let mut state = STATE.0.borrow_mut();
-        self.init_add_exp_event(&mut state, &player_id, ranch_id, elf_id);
-        self.init_health_reduce_event(&mut state, &player_id, ranch_id, elf_id);
-        self.init_satiety_reduce_event(&mut state, &player_id, ranch_id, elf_id);
-        self.init_add_gold_event(&mut state, &player_id, ranch_id, elf_id);
-        self.init_add_shit_event(&mut state, &player_id, ranch_id, elf_id);
+        self.init_add_exp_event(&mut state, &player_id, ranch_id, elf.clone());
+        self.init_health_reduce_event(&mut state, &player_id, ranch_id, elf.clone());
+        self.init_satiety_reduce_event(&mut state, &player_id, ranch_id, elf.clone());
+        self.init_add_gold_event(&mut state, &player_id, ranch_id, elf.clone());
+        self.init_add_shit_event(&mut state, &player_id, ranch_id, elf.clone());
     }
 
     // 初始化添加金币事件
@@ -224,14 +224,17 @@ impl Transaction {
         mut state: &mut State,
         pid: &[u64; 2],
         ranch_id: u64,
-        elf_id: u64,
+        elf: Elf,
     ) {
+        if elf.max_gold_store == elf.current_gold_store {
+            return;
+        }
         // 给新的宠物添加事件
         let event = Event {
             owner: *pid,
             event_type: ADD_GOLD,
             ranch_id,
-            elf_id,
+            elf_id: elf.id,
             delta: 1,
         };
         let is_exits = state.queue.list.contains(&event);
@@ -246,21 +249,23 @@ impl Transaction {
         mut state: &mut State,
         pid: &[u64; 2],
         ranch_id: u64,
-        elf_id: u64,
+        elf: Elf,
     ) {
+        if elf.exp == 10000 {
+            return;
+        }
         // 给新的宠物添加事件
         let event = Event {
             owner: *pid,
             event_type: ADD_EXP,
             ranch_id,
-            elf_id,
+            elf_id: elf.id,
             delta: 1,
         };
         let is_exits = state.queue.list.contains(&event);
         if !is_exits {
             state.queue.insert(event);
         }
-
     }
 
     // 初始化减少健康值的事件
@@ -269,14 +274,17 @@ impl Transaction {
         mut state: &mut State,
         pid: &[u64; 2],
         ranch_id: u64,
-        elf_id: u64,
+        elf: Elf,
     ) {
+        if elf.health == 0 {
+            return;
+        }
         // 给新的宠物添加事件
         let event = Event {
             owner: *pid,
             event_type: HEALTH_REDUCE,
             ranch_id,
-            elf_id,
+            elf_id: elf.id,
             delta: 1, // 5秒一次tick， 每分钟减少健康度
         };
         let is_exits = state.queue.list.contains(&event);
@@ -291,14 +299,17 @@ impl Transaction {
         state: &mut State,
         pid: &[u64; 2],
         ranch_id: u64,
-        elf_id: u64,
+        elf: Elf,
     ) {
+        if elf.satiety == 0 {
+            return;
+        }
         // 给新的宠物添加事件
         let event = Event {
             owner: *pid,
             event_type: SATIETY_REDUCE,
             ranch_id,
-            elf_id,
+            elf_id: elf.id,
             delta: 1, // 5秒一次tick，每小时减少饱食度
         };
         let is_exits = state.queue.list.contains(&event);
@@ -313,14 +324,14 @@ impl Transaction {
         state: &mut State,
         pid: &[u64; 2],
         ranch_id: u64,
-        elf_id: u64,
+        elf: Elf,
     ) {
         // 给新的宠物添加事件
         let event = Event {
             owner: *pid,
             event_type: ADD_SHIT,
             ranch_id,
-            elf_id,
+            elf_id: elf.id,
             delta: (60 / 5) * 3, // 5秒一次tick，每3分钟增加shit
         };
         let is_exits = state.queue.list.contains(&event);
@@ -367,7 +378,7 @@ lazy_static::lazy_static! {
 
 pub struct State {
     supplier: u64,
-    queue: EventQueue<Event>
+    queue: EventQueue<Event>,
 }
 
 impl State {
@@ -405,7 +416,7 @@ impl State {
     pub fn settle(&mut self, rand: u64) {}
 
 
-    pub fn hash_event_contains(event: Event) ->  bool {
+    pub fn hash_event_contains(event: Event) -> bool {
         let state = STATE.0.borrow();
         let x = state.queue.list.contains(&event);
         x
