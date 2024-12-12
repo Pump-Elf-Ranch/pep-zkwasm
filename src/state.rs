@@ -4,7 +4,7 @@ use crate::player::ElfPlayer;
 use sha2::Digest;
 use std::cell::RefCell;
 use crate::elf::Elf;
-use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::ranch::Ranch;
 use lazy_static::lazy_static;
 use zkwasm_rest_abi::StorageData;
@@ -259,6 +259,9 @@ impl Transaction {
         self.init_satiety_reduce_event(&mut state, &player_id, ranch_id, elf.clone());
         self.init_add_gold_event(&mut state, &player_id, ranch_id, elf.clone());
         self.init_add_shit_event(&mut state, &player_id, ranch_id, elf.clone());
+        self.init_add_health_event(&mut state, &player_id, ranch_id, elf.clone());
+        // todo 道具检查事件
+        // todo 自动消耗金币治疗宠物，自动收集金币，自动清理牧场
     }
 
     // 初始化添加金币事件
@@ -380,6 +383,97 @@ impl Transaction {
         }
     }
 
+    // 初始化健康增加事件
+    pub fn init_add_health_event(
+        &self,
+        state: &mut State,
+        pid: &[u64; 2],
+        ranch_id: u64,
+        elf: Elf,
+    ) {
+        // 给新的宠物添加事件
+        let event = Event {
+            owner: *pid,
+            event_type: HEALTH_ADD,
+            ranch_id,
+            elf_id: elf.id,
+            delta: (60 / 5), // 5秒一次tick，每1分钟增加健康
+        };
+        let is_exits = state.queue.list.contains(&event);
+        if !is_exits {
+            state.queue.insert(event);
+        }
+    }
+
+    // 喂食精灵
+    pub fn feed_elf(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                let ranch_id = self.data[0];
+                let elf_id = self.data[1];
+                let prop_type = self.data[2];
+                let elf = player.data.get_elf_mut(ranch_id, elf_id);
+                if let Some(elf) = elf {
+                    let elf_event = elf.clone();
+                    if let  Some(user_prop) = player.data.get_prop_by_type(ranch_id, prop_type){
+                        zkwasm_rust_sdk::dbg!("user_prop {:?}\n", user_prop);
+                        if user_prop.count == 0 {
+                            return Err(ERROR_NOT_FOUND_PROP);
+                        }
+                        player.data.feed_elf(ranch_id, elf_id,prop_type);
+                        player.data.reduce_prop(ranch_id,prop_type);
+                        player.data.feed_count +=1;
+                        player.store();
+                        // 初始化宠物事件
+                        self.init_event(*pid, ranch_id, elf_event);
+                        Ok(())
+                    } else {
+                        Err(ERROR_NOT_FOUND_PROP)
+                    }
+                } else {
+                    Err(ERROR_NOT_FOUND_ELF)
+                }
+            }
+        }
+    }
+
+    // 治疗精灵
+    pub fn healing_elf(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                let ranch_id = self.data[0];
+                let elf_id = self.data[1];
+                let prop_type = self.data[2];
+                let elf = player.data.get_elf_mut(ranch_id, elf_id);
+                if let Some(elf) = elf {
+                    let elf_event = elf.clone();
+                    if let  Some(user_prop) = player.data.get_prop_by_type(ranch_id, prop_type){
+                        if user_prop.count == 0 {
+                            return Err(ERROR_NOT_FOUND_PROP);
+                        }
+                        player.data.healing_elf(ranch_id, elf_id,prop_type);
+                        player.data.reduce_prop(ranch_id,prop_type);
+                        player.data.health_count +=1;
+                        player.store();
+                        // 初始化宠物事件
+                        self.init_event(*pid, ranch_id, elf_event);
+                        Ok(())
+                    } else {
+                        Err(ERROR_NOT_FOUND_PROP)
+                    }
+                } else {
+                    Err(ERROR_NOT_FOUND_ELF)
+                }
+            }
+        }
+    }
+
     // 游戏进程
     pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
         zkwasm_rust_sdk::dbg!("rand {:?}\n", { sigr });
@@ -398,6 +492,11 @@ impl Transaction {
                 .map_or_else(|e| e, |_| 0),
             BUY_PROP => self.buy_prop(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
+            FEED_ELF => self.feed_elf(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            TREAT_ELF => self.healing_elf(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+
             _ => {
                 // unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});

@@ -32,6 +32,9 @@ const CMD_CLEAN_RANCH = 4n;
 const CMD_COLLECT_GOLD = 11n;
 const CMD_WITHDRAW = 7n;
 const CMD_PROP = 12n;
+
+const CMD_FEED_ELF = 3n; // 喂食精灵
+const  CMD_TREAT_ELF = 5n; // 治疗宠物
 function createCommand(nonce: bigint, command: bigint, objindex: bigint) {
   return (nonce << 16n) + (objindex << 8n) + command;
 }
@@ -151,6 +154,39 @@ export class Player {
     }
   }
 
+  async feed_elf( ranch_id: bigint,elf_id:bigint,prop_type:bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+          new BigUint64Array([createCommand(nonce, CMD_FEED_ELF, 0n), ranch_id, elf_id, prop_type]),
+          this.processingKey
+      );
+      console.log("feed_elf processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("feed_elf error at ranch_id:", ranch_id, "prop_type :", prop_type);
+    }
+  }
+
+  async treat_elf( ranch_id: bigint,elf_id:bigint,prop_type:bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+          new BigUint64Array([createCommand(nonce, CMD_TREAT_ELF, 0n), ranch_id, elf_id, prop_type]),
+          this.processingKey
+      );
+      console.log("treat_elf processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("treat_elf error at ranch_id:", ranch_id, "prop_type :", prop_type);
+    }
+  }
 
 
 

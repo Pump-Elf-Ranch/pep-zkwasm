@@ -6,6 +6,7 @@ use std::slice::IterMut;
 use std::str;
 use zkwasm_rest_abi::StorageData;
 use crate::error::ERROR_INVALID_PURCHASE_CONDITION;
+use crate::prop::{Cabbage, Carrot, Healing_Potion};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Elf {
@@ -382,6 +383,55 @@ impl Elf {
             return left_can_add_gold;
         }
         need_add.ceil() as u64
+    }
+
+    // 计算需要增加的饱食度
+    pub fn compute_need_add_satiety(prop_type: u64,elf: Elf) -> u64 {
+        let carrot = Carrot.0;
+        let cabbage = Cabbage.0;
+        let mut base_satiety:f64 = 0.0;
+
+
+        if prop_type == carrot {
+            base_satiety = 2.0;
+        } else if prop_type == cabbage {
+            base_satiety = 30.0;
+        }
+
+        if base_satiety == 0.0 {
+            return 0;
+        }
+
+        // 剩余饱食度
+        let can_add_satiety =  10000 - elf.satiety;
+        let prop_add_satiety = ((base_satiety/100.0) * 10000.0) .ceil() as u64;
+        if prop_add_satiety > can_add_satiety {
+            return can_add_satiety;
+        }
+        prop_add_satiety
+    }
+
+    // 计算需要增加的健康值
+    pub fn compute_need_add_health(prop_type: u64,elf: Elf) -> u64 {
+        let healing_potion = Healing_Potion.0;
+        let mut base_health:f64 = 0.0;
+
+
+        if prop_type == healing_potion {
+            base_health = 10.0;
+        }
+
+        if base_health == 0.0 {
+            return 0;
+        }
+
+        // 剩余健康度
+        let can_add_health =  10000 - elf.health;
+        let prop_add_health = ((base_health/100.0) * 10000.0) .ceil() as u64;
+        if prop_add_health > can_add_health {
+            return can_add_health;
+        }
+        prop_add_health
     }
 
 

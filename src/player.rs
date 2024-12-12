@@ -3,17 +3,18 @@ use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDU
 use crate::events::Event;
 use crate::prop::{Prop, UserProp};
 use crate::ranch::Ranch;
+use crate::state::State;
 use crate::StorageData;
 use crate::{ranch, Player};
 use serde::Serialize;
 use std::slice::IterMut;
-use crate::state::State;
 
 #[derive(Debug, Serialize)]
 pub struct PlayerData {
     pub gold_count: u64,    // 累计金币数量
     pub clean_count: u64,   // 累计清洁次数
     pub feed_count: u64,    // 累计喂食次数
+    pub health_count: u64,  // 累计治疗次数
     pub gold_balance: u64,  // 金币余额
     pub ranchs: Vec<Ranch>, // 拥有的牧场
 }
@@ -24,6 +25,7 @@ impl Default for PlayerData {
             gold_count: 0,
             clean_count: 0,
             feed_count: 0,
+            health_count: 0,
             gold_balance: 120, // 新用户默认给120个金币
             ranchs: vec![],
         }
@@ -54,6 +56,35 @@ impl PlayerData {
         None
     }
 
+    // 喂养宠物
+    pub fn feed_elf(&mut self, ranch_id: u64, elf_id: u64, prop_type: u64) {
+        if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
+            let can_add_satiety = Elf::compute_need_add_satiety(prop_type, elf.clone());
+            elf.satiety += can_add_satiety;
+            zkwasm_rust_sdk::dbg!("feed elf! \n");
+        }
+    }
+
+    // 治疗宠物
+    pub fn healing_elf(&mut self, ranch_id: u64, elf_id: u64, prop_type: u64) {
+        if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
+            let can_add_health = Elf::compute_need_add_health(prop_type, elf.clone());
+            elf.health += can_add_health;
+            zkwasm_rust_sdk::dbg!("healing elf! \n");
+        }
+    }
+
+    // 扣除道具
+    pub fn reduce_prop(&mut self, ranch_id: u64, prop_type: u64) {
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            if let Some(prop) = ranch.props.iter_mut().find(|p| p.prop_type == prop_type) {
+                prop.count -= 1;
+                zkwasm_rust_sdk::dbg!("reduce_prop! \n");
+                return;
+            }
+        }
+    }
+
     // 指定牧场，添加宠物
     pub fn set_elf_by_ranch(&mut self, ranch_id: u64, elf: Elf) {
         if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
@@ -63,9 +94,13 @@ impl PlayerData {
     }
 
     // 指定牧场，添加道具
-    pub fn set_prop_by_ranch(&mut self,ranch_id: u64, user_prop: UserProp) {
+    pub fn set_prop_by_ranch(&mut self, ranch_id: u64, user_prop: UserProp) {
         if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
-            if let Some(prop) = ranch.props.iter_mut().find(|p| p.prop_type == user_prop.prop_type) {
+            if let Some(prop) = ranch
+                .props
+                .iter_mut()
+                .find(|p| p.prop_type == user_prop.prop_type)
+            {
                 prop.count += 1;
                 zkwasm_rust_sdk::dbg!("add prop! \n");
                 return;
@@ -76,13 +111,12 @@ impl PlayerData {
         }
     }
 
-    pub fn set_prop_by_type(&mut self,ranch_id: u64, prop_type: u64) -> Option<& mut UserProp> {
+    pub fn get_prop_by_type(&mut self, ranch_id: u64, prop_type: u64) -> Option<&mut UserProp> {
         if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
-            ranch.props.iter_mut().find(|p| p.prop_type == prop_type);
+            return ranch.props.iter_mut().find(|p| p.prop_type == prop_type);
         }
         None
     }
-
 
     // 宠物增加经验
     pub fn elf_add_exp_event(
@@ -185,9 +219,13 @@ impl PlayerData {
             elf_id,
             health_reduce
         );
+        if elf.health > health_reduce {
+            // 更新精灵健康值
+            elf.health -= health_reduce;
+        } else {
+            elf.health = 0;
+        }
 
-        // 更新精灵健康值
-        elf.health -= health_reduce;
 
         // 检查健康值是否大于 0，如果大于 0，返回事件
         if elf.health > 0 {
@@ -231,7 +269,11 @@ impl PlayerData {
             let current_elf = elf.clone();
             let satiety_reduce = Elf::compute_satiety_reduce(current_elf);
             zkwasm_rust_sdk::dbg!("satiety_reduce is {:?} \n", satiety_reduce);
-            elf.satiety -= satiety_reduce;
+            if elf.satiety > satiety_reduce {
+                elf.satiety -= satiety_reduce;
+            } else {
+                elf.satiety = 0;
+            }
             // 如果饱食度，返回 Event；否则返回 None
             if elf.satiety > 0 {
                 return Some(Event {
@@ -274,6 +316,37 @@ impl PlayerData {
         None
     }
 
+    // 根据牧场清洁度增加健康值
+    pub fn add_health_event(
+        &mut self,
+        owner: [u64; 2],
+        event_type: u64,
+        ranch_id: u64,
+        elf_id: u64,
+    ) -> Option<Event> {
+        zkwasm_rust_sdk::dbg!("add_health_event \n");
+        if let Some(ranch) = self.get_ranch_mut(ranch_id) {
+            if ranch.ranch_clean < 5 {
+                if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
+                    let add_health = (10000.0f64 * 0.25).ceil() as u64;
+                    let is_reduce_health = 10000 - elf.health;
+                    if is_reduce_health > add_health {
+                        elf.health += add_health;
+                    } else {
+                        elf.health = 10000;
+                    }
+                }
+            }
+        }
+        Some(Event {
+            owner,
+            event_type,
+            ranch_id,
+            elf_id,
+            delta: (60 / 5),
+        })
+    }
+
     pub fn event_hand(
         &mut self,
         player_id: [u64; 2],
@@ -289,6 +362,7 @@ impl PlayerData {
                 self.elf_satiety_reduce_event(player_id, event_type, ranch_id, elf_id)
             }
             ADD_SHIT => self.add_shit_event(player_id, event_type, ranch_id, elf_id),
+            HEALTH_ADD => self.add_health_event(player_id, event_type, ranch_id, elf_id),
             _ => None,
         };
         event
@@ -301,6 +375,7 @@ impl StorageData for PlayerData {
         let gold_count = *u64data.next().unwrap();
         let clean_count = *u64data.next().unwrap();
         let feed_count = *u64data.next().unwrap();
+        let health_count = *u64data.next().unwrap();
         let gold_balance = *u64data.next().unwrap();
 
         // 读取牧场的数据
@@ -315,6 +390,7 @@ impl StorageData for PlayerData {
             gold_count,
             clean_count,
             feed_count,
+            health_count,
             gold_balance,
             ranchs,
         }
@@ -325,6 +401,7 @@ impl StorageData for PlayerData {
         data.push(self.gold_count);
         data.push(self.clean_count);
         data.push(self.feed_count);
+        data.push(self.health_count);
         data.push(self.gold_balance);
 
         // 将牧场数据推入数据流

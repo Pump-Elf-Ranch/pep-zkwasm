@@ -5,21 +5,21 @@ use crate::StorageData;
 
 
 // 魔法扫帚
-const Magic_Broom: (u64,u64) =(1,1);
+pub const Magic_Broom: (u64,u64) =(1,1);
 
 // 布谷屋
-const Bugu_House: (u64,u64) =(2,1);
+pub const Bugu_House: (u64,u64) =(2,1);
 // 金钱蜂巢
-const Money_Hive: (u64,u64) =(3,1);
+pub const Money_Hive: (u64,u64) =(3,1);
 
 // 胡萝卜
-const Carrot: (u64,u64) =(4,5);
+pub const Carrot: (u64,u64) =(4,5);
 
 // 卷心菜
-const Cabbage: (u64,u64) =(5,75);
+pub const Cabbage: (u64,u64) =(5,75);
 
 // 治疗剂
-const Healing_Potion: (u64,u64) =(6,150);
+pub const Healing_Potion: (u64,u64) =(6,150);
 
 pub const price_type_usdt :u64= 1;
 pub const price_type_gold :u64= 2;
