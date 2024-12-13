@@ -18,6 +18,7 @@ impl PartialEq for Event {
             && self.event_type == other.event_type
             && self.ranch_id == other.ranch_id
             && self.elf_id == other.elf_id
+            && self.delta == other.delta
     }
 }
 
@@ -28,7 +29,7 @@ impl StorageData for Event {
         buf.push(self.owner[1]);
         buf.push(self.event_type);
         buf.push(self.ranch_id);
-        buf.push(self.ranch_id);
+        buf.push(self.elf_id);
         buf.push(self.delta as u64);
     }
     fn from_data(u64data: &mut IterMut<u64>) -> Event {
