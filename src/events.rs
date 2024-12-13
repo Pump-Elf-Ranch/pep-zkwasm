@@ -18,7 +18,6 @@ impl PartialEq for Event {
             && self.event_type == other.event_type
             && self.ranch_id == other.ranch_id
             && self.elf_id == other.elf_id
-            && self.delta == other.delta
     }
 }
 
