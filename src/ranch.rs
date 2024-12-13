@@ -10,7 +10,7 @@ pub struct Ranch {
     pub ranch_clean: u64, // 牧场清洁度
     pub elf_slot: u64, // 牧场槽位
     pub elfs: Vec<Elf>, // 拥有的精灵
-    pub props: Vec<UserProp>,   // 拥有的道具 ,牧场id，道具类型，数量
+    pub props: Vec<UserProp>,   // 拥有的道具 ，道具类型，数量
 }
 
 impl Ranch {
