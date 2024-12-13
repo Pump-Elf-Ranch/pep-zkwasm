@@ -1,5 +1,5 @@
 use crate::elf::Elf;
-use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_REDUCE, SATIETY_REDUCE};
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
 use crate::prop::{Prop, UserProp};
 use crate::ranch::Ranch;
@@ -358,9 +358,7 @@ impl PlayerData {
             ADD_EXP => self.elf_add_exp_event(player_id, event_type, ranch_id, elf_id),
             ADD_GOLD => self.elf_add_gold_event(player_id, event_type, ranch_id, elf_id),
             HEALTH_REDUCE => self.elf_health_reduce_event(player_id, event_type, ranch_id, elf_id),
-            SATIETY_REDUCE => {
-                self.elf_satiety_reduce_event(player_id, event_type, ranch_id, elf_id)
-            }
+            SATIETY_REDUCE => self.elf_satiety_reduce_event(player_id, event_type, ranch_id, elf_id),
             ADD_SHIT => self.add_shit_event(player_id, event_type, ranch_id, elf_id),
             HEALTH_ADD => self.add_health_event(player_id, event_type, ranch_id, elf_id),
             _ => None,
