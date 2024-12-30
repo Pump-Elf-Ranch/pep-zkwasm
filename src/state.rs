@@ -1,17 +1,17 @@
+use crate::elf::{Elf, StandElf};
 use crate::error::*;
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
 use crate::player::ElfPlayer;
-use sha2::Digest;
-use std::cell::RefCell;
-use crate::elf::Elf;
-use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
+use crate::prop::{price_type_gold, Prop, UserProp};
 use crate::ranch::Ranch;
 use lazy_static::lazy_static;
+use sha2::Digest;
+use std::cell::RefCell;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
 use zkwasm_rest_convention::SettlementInfo;
-use crate::prop::{price_type_gold, Prop, UserProp};
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -176,7 +176,7 @@ impl Transaction {
                         return Err(ERROR_NOT_FOUND_RANCH);
                     }
                 }
-                if let Some(prop) = Prop::get_prop_by_type(prop_type){
+                if let Some(prop) = Prop::get_prop_by_type(prop_type) {
                     if prop.price_type == price_type_gold {
                         let gold_balance = player.data.gold_balance;
                         if gold_balance < prop.price {
@@ -362,13 +362,7 @@ impl Transaction {
     }
 
     // 初始化污染度增加事件
-    pub fn init_add_shit_event(
-        &self,
-        state: &mut State,
-        pid: &[u64; 2],
-        ranch_id: u64,
-        elf: Elf,
-    ) {
+    pub fn init_add_shit_event(&self, state: &mut State, pid: &[u64; 2], ranch_id: u64, elf: Elf) {
         // 给新的宠物添加事件
         let event = Event {
             owner: *pid,
@@ -418,14 +412,14 @@ impl Transaction {
                 let elf = player.data.get_elf_mut(ranch_id, elf_id);
                 if let Some(elf) = elf {
                     let elf_event = elf.clone();
-                    if let  Some(user_prop) = player.data.get_prop_by_type(ranch_id, prop_type){
+                    if let Some(user_prop) = player.data.get_prop_by_type(ranch_id, prop_type) {
                         zkwasm_rust_sdk::dbg!("user_prop {:?}\n", user_prop);
                         if user_prop.count == 0 {
                             return Err(ERROR_NOT_FOUND_PROP);
                         }
-                        player.data.feed_elf(ranch_id, elf_id,prop_type);
-                        player.data.reduce_prop(ranch_id,prop_type);
-                        player.data.feed_count +=1;
+                        player.data.feed_elf(ranch_id, elf_id, prop_type);
+                        player.data.reduce_prop(ranch_id, prop_type);
+                        player.data.feed_count += 1;
                         player.store();
                         // 初始化宠物事件
                         self.init_event(*pid, ranch_id, elf_event);
@@ -453,13 +447,13 @@ impl Transaction {
                 let elf = player.data.get_elf_mut(ranch_id, elf_id);
                 if let Some(elf) = elf {
                     let elf_event = elf.clone();
-                    if let  Some(user_prop) = player.data.get_prop_by_type(ranch_id, prop_type){
+                    if let Some(user_prop) = player.data.get_prop_by_type(ranch_id, prop_type) {
                         if user_prop.count == 0 {
                             return Err(ERROR_NOT_FOUND_PROP);
                         }
-                        player.data.healing_elf(ranch_id, elf_id,prop_type);
-                        player.data.reduce_prop(ranch_id,prop_type);
-                        player.data.health_count +=1;
+                        player.data.healing_elf(ranch_id, elf_id, prop_type);
+                        player.data.reduce_prop(ranch_id, prop_type);
+                        player.data.health_count += 1;
                         player.store();
                         // 初始化宠物事件
                         self.init_event(*pid, ranch_id, elf_event);
@@ -467,6 +461,37 @@ impl Transaction {
                     } else {
                         Err(ERROR_NOT_FOUND_PROP)
                     }
+                } else {
+                    Err(ERROR_NOT_FOUND_ELF)
+                }
+            }
+        }
+    }
+
+    // 卖出精灵
+    pub fn sell_elf(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                let ranch_id = self.data[0];
+                let elf_id = self.data[1];
+                let elf = player.data.get_elf_mut(ranch_id, elf_id);
+                if let Some(elf) = elf {
+                    let elf_type = elf.elf_type;
+                    let grade = elf.grade;
+                    let elf_id = elf.id;
+                    // 移除精灵
+                    let is_remove = player.data.remove_elf_mut(ranch_id, elf_id);
+                    if is_remove {
+                        // 获取精灵的卖出价格
+                        let stand_elf = StandElf::get_elf_by_type(elf_type, grade);
+                        let sell_price = stand_elf.sell_price;
+                        player.data.gold_balance += sell_price;
+                        player.store();
+                    }
+                    Ok(())
                 } else {
                     Err(ERROR_NOT_FOUND_ELF)
                 }
@@ -488,13 +513,20 @@ impl Transaction {
             COLLECT_GOLD => self
                 .collect_gold(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
-            CLEAN_RANCH => self.clean_ranch(&ElfPlayer::pkey_to_pid(&pkey))
+            CLEAN_RANCH => self
+                .clean_ranch(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
-            BUY_PROP => self.buy_prop(&ElfPlayer::pkey_to_pid(&pkey))
+            BUY_PROP => self
+                .buy_prop(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
-            FEED_ELF => self.feed_elf(&ElfPlayer::pkey_to_pid(&pkey))
+            FEED_ELF => self
+                .feed_elf(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
-            TREAT_ELF => self.healing_elf(&ElfPlayer::pkey_to_pid(&pkey))
+            TREAT_ELF => self
+                .healing_elf(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            SELL_ELF => self
+                .sell_elf(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
 
             _ => {
@@ -555,7 +587,6 @@ impl State {
         0
     }
     pub fn settle(&mut self, rand: u64) {}
-
 
     pub fn hash_event_contains(event: Event) -> bool {
         let state = STATE.0.borrow();

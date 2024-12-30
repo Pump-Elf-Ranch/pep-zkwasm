@@ -545,6 +545,15 @@ impl StandElf {
             sell_price,
         }
     }
+
+    pub fn get_elf_by_type(elf_type: u64, grade: u64) -> StandElf {
+        // 过滤出符合 elf_type 和 grade 的精灵
+        let filtered_elfs: Vec<&StandElf> = DEFAULT_STAND_ELF
+            .iter()
+            .filter(|elf| elf.elf_type == elf_type && elf.grade == grade)
+            .collect();
+       filtered_elfs[0].clone()
+    }
 }
 
 // 精灵品质等级抽奖参数

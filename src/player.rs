@@ -39,10 +39,28 @@ impl PlayerData {
         // 在该牧场中查找指定的精灵
         ranch.elfs.iter_mut().find(|e| e.id == elf_id)
     }
+
     // 根据牧场id获得牧场
     pub fn get_ranch_mut(&mut self, ranch_id: u64) -> Option<&mut Ranch> {
         // 在玩家的牧场中查找匹配的牧场
         self.ranchs.iter_mut().find(|r| r.id == ranch_id)
+    }
+
+    // 根据牧场id和宠物id移除宠物
+    pub fn remove_elf_mut(&mut self, ranch_id: u64, elf_id: u64) -> bool {
+        // 查找指定的牧场
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            // 在该牧场中查找指定的精灵
+            if let Some(_) = ranch.elfs.iter_mut().find(|e| e.id == elf_id) {
+                // 移除精灵
+                ranch.elfs.retain(|e| e.id != elf_id);
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        true
     }
 
     // 获取制定牧场id的宠物数量
