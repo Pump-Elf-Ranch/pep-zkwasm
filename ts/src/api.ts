@@ -28,6 +28,7 @@ function addrToParams(bn: BN): Array<bigint> {
 
 const CMD_INSTALL_PLAYER = 1n;
 const CMD_BUY_ELF = 2n;
+const CMD_SELL_ELF = 6n;
 const CMD_CLEAN_RANCH = 4n;
 const CMD_COLLECT_GOLD = 11n;
 const CMD_WITHDRAW = 7n;
@@ -134,6 +135,23 @@ export class Player {
         console.log(e.message);
       }
       console.log("buy_elf error at ranch_id:", ranch_id, "elf_type :", elf_type);
+    }
+  }
+
+  async sell_elf( ranch_id: bigint,elf_id:bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+          new BigUint64Array([createCommand(nonce, CMD_SELL_ELF, 0n), ranch_id, elf_id, 0n]),
+          this.processingKey
+      );
+      console.log("sell_elf processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("sell_elf error at ranch_id:", ranch_id, "elf_id :", elf_id);
     }
   }
 
