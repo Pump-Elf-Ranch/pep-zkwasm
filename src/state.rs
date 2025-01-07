@@ -47,6 +47,8 @@ const BOUNTY: u64 = 9;
 const BUY_RANCH: u64 = 10; // 购买牧场
 const COLLECT_GOLD: u64 = 11; // 收集金币
 
+const BUY_SLOT: u64 = 13; // 购买宠物槽位
+
 const BUY_PROP: u64 = 12; // 购买道具
 
 impl Transaction {
@@ -63,6 +65,7 @@ impl Transaction {
             ERROR_NOT_FOUND_PROP => "NotFoundProp",
             ERROR_THIS_PROP_MUST_BE_USED_USDT => "ThisPropMustBeUsedUSDT",
             ERROR_INVALID_PURCHASE_CONDITION => "InvalidPurchaseCondition",
+            ERROR_MAX_ELF_SLOT => "MaxElfSlot",
             _ => "Unknown",
         }
     }
@@ -192,6 +195,38 @@ impl Transaction {
                 } else {
                     return Err(ERROR_NOT_FOUND_PROP);
                 }
+                Ok(())
+            }
+        }
+    }
+
+    // 购买精灵槽位
+    pub fn buy_slot(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+                // 获取牧场id
+                let ranch_id = self.data[0];
+                {
+                    let ranch = player.data.get_ranch_mut(ranch_id);
+                    if ranch.is_none() {
+                        return Err(ERROR_NOT_FOUND_RANCH);
+                    }
+                    if ranch.unwrap().elf_slot == 10 {
+                        return Err(ERROR_MAX_ELF_SLOT);
+                    }
+                }
+
+                let slot_price = player.data.get_ranch_slot_price(ranch_id);
+                let gold_balance = player.data.gold_balance.clone();
+                if gold_balance < slot_price {
+                    return Err(ERROR_NOT_GOLD_BALANCE);
+                }
+                player.data.gold_balance -= slot_price;
+                player.data.add_ranch_elf_slot(ranch_id);
+                player.store();
                 Ok(())
             }
         }
@@ -527,6 +562,9 @@ impl Transaction {
                 .map_or_else(|e| e, |_| 0),
             SELL_ELF => self
                 .sell_elf(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            BUY_SLOT => self
+                .buy_slot(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
 
             _ => {

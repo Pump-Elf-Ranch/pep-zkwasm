@@ -33,6 +33,7 @@ const CMD_CLEAN_RANCH = 4n;
 const CMD_COLLECT_GOLD = 11n;
 const CMD_WITHDRAW = 7n;
 const CMD_PROP = 12n;
+const CMD_BUY_SLOT = 13n;
 
 const CMD_FEED_ELF = 3n; // 喂食精灵
 const  CMD_TREAT_ELF = 5n; // 治疗宠物
@@ -169,6 +170,23 @@ export class Player {
         console.log(e.message);
       }
       console.log("buy_prop error at ranch_id:", ranch_id, "prop_type :", prop_type);
+    }
+  }
+
+  async buy_slot( ranch_id: bigint) {
+    let nonce = await this.getNonce();
+    console.log("nonce :",nonce)
+    try {
+      let finished = await rpc.sendTransaction(
+          new BigUint64Array([createCommand(nonce, CMD_BUY_SLOT, 0n), ranch_id, 0n, 0n]),
+          this.processingKey
+      );
+      console.log("buy_slot processed at:", finished);
+    } catch(e) {
+      if(e instanceof Error) {
+        console.log(e.message);
+      }
+      console.log("buy_slot error at ranch_id:", ranch_id);
     }
   }
 

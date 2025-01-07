@@ -2,7 +2,7 @@ use std::slice::IterMut;
 use serde::Serialize;
 use zkwasm_rest_abi::StorageData;
 use crate::elf::Elf;
-use crate::prop::UserProp;
+use crate::prop::{Prop, UserProp, PROP_LIST};
 
 #[derive(Debug,Serialize, Clone)]
 pub struct Ranch {
@@ -67,10 +67,68 @@ impl Ranch {
     pub fn new(id: u64) -> Self {
         Ranch{
             id,
-            elf_slot:10,
+            elf_slot:1,
             ranch_clean:0,
             elfs:vec![],
             props:vec![]
         }
     }
+}
+
+#[derive(Debug,Serialize, Clone)]
+pub struct RanchSlot {
+    pub id: u64,
+    pub price: u64,
+}
+
+impl RanchSlot {
+    pub fn to_data(&self, data: &mut Vec<u64>) {
+        data.push(self.id);
+        data.push(self.price);
+    }
+    pub fn from_data(u64data: &mut IterMut<u64>) -> Self {
+        let id = *u64data.next().unwrap();
+        let price = *u64data.next().unwrap();
+        RanchSlot {
+            id,
+            price
+        }
+    }
+
+    pub fn new(id: u64, price: u64) -> Self {
+        RanchSlot {
+            id,
+            price
+        }
+    }
+
+    pub fn get_all_ranch_slots() -> &'static Vec<RanchSlot> {
+        &*RANCH_SLOT_LIST
+    }
+
+    pub fn get_price_by_id(id: u64) -> u64 {
+        let slots = RanchSlot::get_all_ranch_slots();
+        for slot in slots {
+            if slot.id == id {
+                return slot.price;
+            }
+        }
+        30000000000000
+    }
+}
+
+lazy_static::lazy_static! {
+    pub static ref RANCH_SLOT_LIST: Vec<RanchSlot> = {
+        vec![
+            RanchSlot::new(2,1000),
+            RanchSlot::new(3,1500),
+            RanchSlot::new(4,2000),
+            RanchSlot::new(5,3000),
+            RanchSlot::new(6,5000),
+            RanchSlot::new(7,7000),
+            RanchSlot::new(8,10000),
+            RanchSlot::new(9,15000),
+            RanchSlot::new(10,21000),
+        ]
+    };
 }

@@ -2,6 +2,7 @@ use crate::elf::{Elf, ElfGradeRandom, StandElf};
 use serde::Serialize;
 use zkwasm_rust_sdk::PoseidonHasher;
 use crate::prop::Prop;
+use crate::ranch::RanchSlot;
 
 pub const ENTITY_ATTRIBUTES_SIZE: usize = 4; //level speed efficiency productivity
 pub const LOCAL_ATTRIBUTES_SIZE: usize = 8;
@@ -22,6 +23,7 @@ pub struct Config {
     elf_list: &'static Vec<StandElf>,
     rand_list: &'static Vec<ElfGradeRandom>,
     store_list: &'static Vec<Prop>,
+    ranch_slot: &'static Vec<RanchSlot>,
 }
 
 /* bounty info
@@ -50,6 +52,7 @@ lazy_static::lazy_static! {
         elf_list:&*Elf::get_all_elfs(),
         rand_list:&*Elf::get_all_randoms(),
         store_list:&*Prop::get_all_pops(),
+        ranch_slot: &*RanchSlot::get_all_ranch_slots(),
     };
 
 

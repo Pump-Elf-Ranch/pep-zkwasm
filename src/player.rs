@@ -2,7 +2,7 @@ use crate::elf::Elf;
 use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
 use crate::prop::{UserProp};
-use crate::ranch::Ranch;
+use crate::ranch::{Ranch, RanchSlot};
 use crate::StorageData;
 use crate::{Player};
 use serde::Serialize;
@@ -193,6 +193,21 @@ impl PlayerData {
             }
         }
         None
+    }
+
+    // 获取牧场槽位价格
+    pub fn get_ranch_slot_price(&self, ranch_id: u64) -> u64 {
+        let ranch = self.ranchs.iter().find(|r| r.id == ranch_id).unwrap();
+        let slot_count = ranch.elf_slot;
+        let need_count_id = slot_count + 1;
+        RanchSlot::get_price_by_id(need_count_id)
+    }
+
+    // 增加牧场槽位
+    pub fn add_ranch_elf_slot(&mut self, ranch_id: u64) {
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            ranch.elf_slot += 1;
+        }
     }
 
     // 宠物减少健康事件
