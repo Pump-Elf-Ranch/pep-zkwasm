@@ -36,10 +36,10 @@ jobs:
           docker push ${IMAGE_URL}
       - name: Update Deploy Version
         run: |
-          sed -i 's/{{IMAGE_VERSION}}/${{ steps.get-commit-sha.outputs.sha }}/g' apply_testnet.yaml
+          sed -i 's/{{IMAGE_VERSION}}/${{ steps.get-commit-sha.outputs.sha }}/g' apply.yaml
 
       - name: Deploy to k3s
         uses: steebchen/kubectl@master
         with:
-          config: ${{ secrets.HUOSHAN_KUBE }}
-          command: apply -f apply_testnet.yaml --force
+          config: ${{ secrets.DOCKER_KUBE }}
+          command: apply -f apply.yaml
