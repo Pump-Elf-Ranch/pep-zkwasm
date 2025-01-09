@@ -21,7 +21,6 @@ spec:
     type: RollingUpdate
   template:
     metadata:
-      creationTimestamp: null
       labels:
         k8s.kuboard.cn/name: per-zkwasm-server
     spec:
