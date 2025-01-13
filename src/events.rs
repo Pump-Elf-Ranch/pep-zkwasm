@@ -64,7 +64,7 @@ impl EventHandler for Event {
         let ranch_id = self.ranch_id;
         let elf_id = self.elf_id;
         let mut player = ElfPlayer::get_from_pid(&owner_id).unwrap();
-        let event =  player.data.event_hand(owner_id, event_type,ranch_id,elf_id);
+        let event =  None;
         player.store();
         event
     }

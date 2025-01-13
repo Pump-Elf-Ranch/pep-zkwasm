@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use crate::state::State;
 use zkwasm_rest_abi::WithdrawInfo;
 
