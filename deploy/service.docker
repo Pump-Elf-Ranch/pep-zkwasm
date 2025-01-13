@@ -43,7 +43,7 @@ RUN npm install
 WORKDIR /usr/src/zkwasm-app
 
 
-RUN make
+RUN make && make publish
 
 WORKDIR /usr/src
 
