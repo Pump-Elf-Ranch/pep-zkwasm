@@ -24,16 +24,16 @@ pub struct Elf {
 }
 
 // 精灵类型，买入价格，卖出价格
-const Hippo: (u64,u64,u64) = (1,100,100);
-const Slerf: (u64,u64,u64) = (2,300,300);
-const Goat: (u64,u64,u64) = (3,1800,1800);
-const Pnut: (u64,u64,u64) = (4,6000,6000);
-const Popcat: (u64,u64,u64) = (5,15000,15000);
-const Brett: (u64,u64,u64) = (6,37500,37500);
-const Wif: (u64,u64,u64) = (7,93750,93750);
-const Bonk: (u64,u64,u64) = (8,152000,152000);
-const Pepe: (u64,u64,u64) = (9,220000,220000);
-const Doge: (u64,u64,u64) = (10,300000,300000);
+const Hippo: (u64, u64, u64) = (1, 100, 100);
+const Slerf: (u64, u64, u64) = (2, 300, 300);
+const Goat: (u64, u64, u64) = (3, 1800, 1800);
+const Pnut: (u64, u64, u64) = (4, 6000, 6000);
+const Popcat: (u64, u64, u64) = (5, 15000, 15000);
+const Brett: (u64, u64, u64) = (6, 37500, 37500);
+const Wif: (u64, u64, u64) = (7, 93750, 93750);
+const Bonk: (u64, u64, u64) = (8, 152000, 152000);
+const Pepe: (u64, u64, u64) = (9, 220000, 220000);
+const Doge: (u64, u64, u64) = (10, 300000, 300000);
 
 impl Elf {
     pub fn new(
@@ -139,7 +139,7 @@ impl Elf {
                 }
             }
             if count >= 5 {
-                return Ok(Pnut.1)
+                return Ok(Pnut.1);
             }
         }
 
@@ -150,7 +150,7 @@ impl Elf {
     pub fn check_can_buy_popcat(mut player: ElfPlayer) -> Result<u64, u32> {
         // 铲屎1500次
         if player.data.clean_count >= 1500 {
-           return  Ok(Popcat.1);
+            return Ok(Popcat.1);
         }
         Err(ERROR_INVALID_PURCHASE_CONDITION)
     }
@@ -269,142 +269,151 @@ impl Elf {
         let left_need_exp = 10000 - exp;
         // 因为growth_time 是分钟，但是这里分钟*了10，所以这里秒钟需要只需要*6
         // 5秒一次tick，所以每秒钟的经验需要*5
-        let need_exp = (10000.0 / (growth_time as f64 * 6.0)) * 5.0;
+        let need_exp = (10000 / (growth_time * 6)) * 5;
         // 如果计算出的每次需要的经验值超过剩余经验值，返回剩余经验值
-        if need_exp.ceil() as u64 > left_need_exp {
+        if need_exp > left_need_exp {
             return left_need_exp;
         }
         // 返回每次任务需要的经验值（向上取整以保证累计不会不足）
-        need_exp.ceil() as u64
+        need_exp
     }
 
     // 计算需要消耗的健康值
     pub fn compute_health_reduce(elf: Elf, ranch_clean: u64) -> u64 {
-
         if elf.health == 0 {
-            return 0;
+            return 0; // 如果健康值已经为 0，不再消耗
         }
 
         let left_health = elf.health;
-        // 基础减少百分比
-        let mut base_reduce: f64 = 1.0;
-        // 如果牧场清洁度小于50%，基础减少百分比增加0.5
-        if ranch_clean > 5 {
-            base_reduce += 0.5;
+
+        // 基础减少百分比 (1% = 1000，表示在精度范围 0 ~ 100000)
+        let mut base_reduce: u64 = 1000;
+
+        // 环境影响计算
+        if ranch_clean > 4 {
+            base_reduce += 500; // 清洁度小于 50%，增加 0.5%
         }
-        // 如果精灵饱腹度小于50%，基础减少百分比增加0.5
         if elf.satiety < 5000 {
-            base_reduce += 0.5;
+            base_reduce += 500; // 饱腹度小于 50%，增加 0.5%
         }
 
-        // 计算需要每分钟减少的健康值
-        let need_reduce = (base_reduce / 100.0) * 10000.0;
-        zkwasm_rust_sdk::dbg!("need_reduce is {:?}\n", need_reduce);
-        // 每5秒一次的tick, 所以每分钟会执行12次，减少的健康值需要 need_reduce /(60/5)
-        let need_reduce = (need_reduce / (60.0 / 5.0)).ceil() as u64;
-        zkwasm_rust_sdk::dbg!("need_reduce2 is {:?}\n", need_reduce);
-        // 如果计算出的每次需要的健康值超过剩余健康值，返回剩余健康值
+        zkwasm_rust_sdk::dbg!("base_reduce is {:?}\n", base_reduce);
+
+        // 计算每分钟减少的健康值（基于当前健康值）
+        let mut need_reduce = (10000 * base_reduce) / 100000;
+
+        // 每 5 秒一次 tick，每分钟有 12 次 tick
+        need_reduce = need_reduce / 12;
+
+        // 确保每次减少值不会超过剩余健康值
         if need_reduce > left_health {
             return left_health;
         }
-        zkwasm_rust_sdk::dbg!("final is {:?}\n", need_reduce);
-        // 返回需要减少的健康值
+
         need_reduce
     }
 
     // 计算需要减少的饱食度
     pub fn compute_satiety_reduce(elf: Elf) -> u64 {
         if elf.satiety == 0 {
-            return 0;
+            return 0; // 如果饱食度已为 0，不再减少
         }
-        let left_satiety = elf.satiety;
-        // 基础减少百分比
-        let mut base_reduce: f64 = 2.0;
 
-        // 计算需要减少的健康值
-        let need_reduce = (base_reduce / 100.0) * 10000.0;
-        // 每5秒一次的tick, 所以每小时会执行12 * 60次，减少的饱食度需要 need_reduce /(60*60/5)
-        let need_reduce = (need_reduce / (60.0 * 60.0 / 5.0)).ceil() as u64;
-        if need_reduce > left_satiety {
+        let left_satiety = elf.satiety;
+
+        // 每小时减少的饱食度（2% -> 2/10000 表示为整数计算）
+        let hourly_reduce = (elf.satiety * 2 ) / 100;
+
+        // 每 5 秒执行一次，1 小时 = 60分钟 ，分为 60 次 tick
+        let tick_reduce = hourly_reduce / 60 ;
+
+        // 如果减少量超过当前剩余饱食度，则返回剩余饱食度
+        if tick_reduce > left_satiety {
             return left_satiety;
         }
-        // 返回需要减少的饱食度
-        need_reduce
+
+        tick_reduce
     }
 
     // 计算需要增加的金币值
     pub fn compute_need_gold(elf: Elf) -> u64 {
         let left_can_add_gold = elf.max_gold_store - elf.current_gold_store;
 
-        // 基础金币系数
-        let base_gold: f64 = elf.current_gold_produce_base as f64;
+        // 基础金币系数（保留整数计算，100 表示 1.0）
+        let base_gold = elf.current_gold_produce_base;
 
-        // 健康系数
-        // 健康值 ≥ 80% = 1.0, 健康值 50-79% = 0.8, 健康值 30-49% = 0.5, 健康值 < 30% = 0.0（不产出金币）。
-        let mut health_gold: f64 = 1.0;
-        if elf.health < 8000 {
-            health_gold = 0.8;
+        // 健康系数（以 100 为 1.0 的基准）
+        let health_factor: u64 = if elf.health < 3000 {
+            0
         } else if elf.health < 5000 {
-            health_gold = 0.5;
-        } else if elf.health < 3000 {
-            health_gold = 0.0;
-        }
-        // 成长阶段系数
-        // 幼年 = 0.5, 成年 = 1.0。
-        let mut growth_gold: f64 = 1.0;
-        if elf.exp < 5000 {
-            growth_gold = 0.5;
-        }
-        // 星级系数
-        // 1星 = 0.5, 2星 = 1.0, 3星 = 1.5, 4星 = 2.0, 5星 = 2.5。
-        let mut grade_gold: f64 = 1.0;
-        match elf.grade {
-            1 => grade_gold = 1.0,
-            2 => grade_gold = 1.5,
-            3 => grade_gold = 2.5,
-            4 => grade_gold = 4.0,
-            5 => grade_gold = 5.0,
-            _ => {}
-        }
-        // 饱食度
-        // • 饱腹度 ≥ 50% = 1.0, 饱腹度 < 50% = 0.5, 饱腹度 < 10% = 0.0（不产出金币）。
-        let mut satiety_gold: f64 = 1.0;
-        if elf.satiety < 5000 {
-            satiety_gold = 0.5;
-        } else if elf.satiety < 1000 {
-            satiety_gold = 0.0;
-        }
+            50 // 0.5
+        } else if elf.health < 8000 {
+            80 // 0.8
+        } else {
+            100 // 1.0
+        };
 
-        // 每分钟可以增加的金币
-        let need_add = base_gold * health_gold * growth_gold * grade_gold * satiety_gold;
-        // 每5秒一次的tick, 所以每分钟会执行12次，增加的金币需要 need_add /(60/5)
-        let need_add = need_add / (60.0 / 5.0);
-        if need_add.ceil() as u64 > left_can_add_gold {
+        // 成长阶段系数（以 100 为 1.0 的基准）
+        let growth_factor: u64 = if elf.exp < 5000 { 50 } else { 100 };
+
+        // 星级系数（以 100 为 1.0 的基准）
+        let grade_factor: u64 = match elf.grade {
+            1 => 100,
+            2 => 150,
+            3 => 250,
+            4 => 400,
+            5 => 500,
+            _ => 100, // 默认 1.0
+        };
+
+        // 饱食度系数（以 100 为 1.0 的基准）
+        let satiety_factor: u64 = if elf.satiety < 1000 {
+            0
+        } else if elf.satiety < 5000 {
+            50 // 0.5
+        } else {
+            100 // 1.0
+        };
+
+        // 计算每分钟产出金币（基础产出 * 各种系数）
+        let need_add = base_gold
+            * health_factor
+            * growth_factor
+            * grade_factor
+            * satiety_factor
+            / (100 * 100 * 100 * 100); // 每个系数按 100 倍缩放
+
+        // 每分钟 1 次产出
+        let need_add_per_tick = need_add ;
+
+        // 检查是否超过剩余可存储金币
+        if need_add_per_tick > left_can_add_gold {
             return left_can_add_gold;
         }
-        need_add.ceil() as u64
+
+        need_add_per_tick
     }
 
     // 计算需要增加的饱食度
-    pub fn compute_need_add_satiety(prop_type: u64,elf: Elf) -> u64 {
+    pub fn compute_need_add_satiety(prop_type: u64, elf: Elf) -> u64 {
         let carrot = Carrot.0;
         let cabbage = Cabbage.0;
-        let mut base_satiety:f64 = 0.0;
+        let mut base_satiety: u64 = 0;
 
 
         if prop_type == carrot {
-            base_satiety = 2.0;
+            base_satiety = 2;
         } else if prop_type == cabbage {
-            base_satiety = 30.0;
+            base_satiety = 30;
         }
 
-        if base_satiety == 0.0 {
+        if base_satiety == 0 {
             return 0;
         }
 
         // 剩余饱食度
-        let can_add_satiety =  10000 - elf.satiety;
-        let prop_add_satiety = ((base_satiety/100.0) * 10000.0) .ceil() as u64;
+        let can_add_satiety = 10000 - elf.satiety;
+        let prop_add_satiety = (base_satiety / 100) * 10000;
         if prop_add_satiety > can_add_satiety {
             return can_add_satiety;
         }
@@ -412,37 +421,34 @@ impl Elf {
     }
 
     // 计算需要增加的健康值
-    pub fn compute_need_add_health(prop_type: u64,elf: Elf) -> u64 {
+    pub fn compute_need_add_health(prop_type: u64, elf: Elf) -> u64 {
         let healing_potion = Healing_Potion.0;
-        let mut base_health:f64 = 0.0;
+        let mut base_health: u64 = 0;
 
 
         if prop_type == healing_potion {
-            base_health = 10.0;
+            base_health = 10;
         }
 
-        if base_health == 0.0 {
+        if base_health == 0 {
             return 0;
         }
 
         // 剩余健康度
-        let can_add_health =  10000 - elf.health;
-        let prop_add_health = ((base_health/100.0) * 10000.0) .ceil() as u64;
+        let can_add_health = 10000 - elf.health;
+        let prop_add_health = (base_health / 100) * 10000;
         if prop_add_health > can_add_health {
             return can_add_health;
         }
         prop_add_health
     }
-
-
-
 }
 
 impl StorageData for Elf {
     fn from_data(u64data: &mut IterMut<u64>) -> Self {
         // 从数据流中提取每个字段
         let id = *u64data.next().unwrap(); // 精灵id
-                                           // 读取 name 长度和字节数据
+        // 读取 name 长度和字节数据
         let name_length = *u64data.next().unwrap() as usize;
         let mut name_bytes = Vec::with_capacity(name_length);
         for _ in 0..((name_length + 7) / 8) {
@@ -552,7 +558,7 @@ impl StandElf {
             .iter()
             .filter(|elf| elf.elf_type == elf_type && elf.grade == grade)
             .collect();
-       filtered_elfs[0].clone()
+        filtered_elfs[0].clone()
     }
 }
 

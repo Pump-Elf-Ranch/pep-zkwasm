@@ -315,7 +315,7 @@ impl Transaction {
             event_type: ADD_GOLD,
             ranch_id,
             elf_id: elf.id,
-            delta: 1,
+            delta: (60 / 5),
         };
         let is_exits = state.queue.list.contains(&event);
         if !is_exits {
@@ -390,7 +390,7 @@ impl Transaction {
             event_type: SATIETY_REDUCE,
             ranch_id,
             elf_id: elf.id,
-            delta: 1, // 5秒一次tick，每小时减少饱食度
+            delta: (60 / 5), // 每分钟一次tick，每小时减少饱食度
         };
         let is_exits = state.queue.list.contains(&event);
         if !is_exits {

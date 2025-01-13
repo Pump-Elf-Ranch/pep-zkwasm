@@ -188,7 +188,7 @@ impl PlayerData {
                     event_type,
                     ranch_id,
                     elf_id,
-                    delta: 1, // 每5秒触发一次的加金币
+                    delta: 60 / 5, // 每5秒触发一次的加金币
                 });
             }
         }
@@ -313,7 +313,7 @@ impl PlayerData {
                     event_type,
                     ranch_id,
                     elf_id,
-                    delta: 1, // 5秒一次tick，减少饱食度
+                    delta: 60 / 5, // 一分钟一次tick，减少饱食度
                 });
             }
         }
@@ -360,7 +360,7 @@ impl PlayerData {
         if let Some(ranch) = self.get_ranch_mut(ranch_id) {
             if ranch.ranch_clean < 5 {
                 if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
-                    let add_health = (10000.0f64 * 0.25).ceil() as u64;
+                    let add_health = (10000 * 25) / 10000;
                     let is_reduce_health = 10000 - elf.health;
                     if is_reduce_health > add_health {
                         elf.health += add_health;
