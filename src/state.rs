@@ -8,10 +8,12 @@ use crate::ranch::Ranch;
 use lazy_static::lazy_static;
 use sha2::Digest;
 use std::cell::RefCell;
-use zkwasm_rest_abi::StorageData;
+use zkwasm_rest_abi::{StorageData};
 use zkwasm_rest_abi::MERKLE_MAP;
-use zkwasm_rest_convention::EventQueue;
-use zkwasm_rest_convention::SettlementInfo;
+use zkwasm_rest_convention::{EventQueue};
+use crate::settlement::{SettlementInfo};
+use zkwasm_rest_abi::WithdrawInfo;
+
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -534,6 +536,38 @@ impl Transaction {
         }
     }
 
+    // 提现
+    pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        let mut player = ElfPlayer::get_from_pid(pid);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                player.check_and_inc_nonce(self.nonce);
+               
+                let amount = (self.data[0] & 0xffffffff) as u64;
+
+                if player.data.gold_balance < amount {
+                    return Err(ERROR_NOT_GOLD_BALANCE);
+                }
+
+                let withdrawinfo =
+                    WithdrawInfo::new(&[self.data[0], self.data[1], self.data[2]], 0);
+                SettlementInfo::append_settlement(withdrawinfo);
+                // let withdraw = WithdrawInfo::new(
+                //     0,
+                //     0,
+                //     0,
+                //     [amount, 0, 0, 0],
+                //     encode_address(&self.data),
+                // );
+                // SettlementInfo::append_settlement(withdraw);
+                player.data.gold_balance -= amount;
+                player.store();
+                Ok(())
+            }
+        }
+    }
+
     // 游戏进程
     pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
         zkwasm_rust_sdk::dbg!("rand {:?}\n", { sigr });
@@ -565,6 +599,9 @@ impl Transaction {
                 .map_or_else(|e| e, |_| 0),
             BUY_SLOT => self
                 .buy_slot(&ElfPlayer::pkey_to_pid(&pkey))
+                .map_or_else(|e| e, |_| 0),
+            WITHDRAW => self
+                .withdraw(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
 
             _ => {

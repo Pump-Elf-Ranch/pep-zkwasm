@@ -10,6 +10,7 @@ pub mod state;
 mod prop;
 mod ranch;
 pub mod event_type;
+pub mod settlement;
 
 use crate::config::Config;
 use crate::state::{State, Transaction};
