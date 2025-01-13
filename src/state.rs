@@ -1,10 +1,10 @@
-// use crate::elf::{Elf, StandElf};
+use crate::elf::{Elf, StandElf};
 use crate::error::*;
-// use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
+use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
 use crate::player::ElfPlayer;
-// use crate::prop::{price_type_gold, Prop, UserProp};
-// use crate::ranch::Ranch;
+use crate::prop::{price_type_gold, Prop, UserProp};
+use crate::ranch::Ranch;
 use lazy_static::lazy_static;
 use std::cell::RefCell;
 use zkwasm_rest_abi::{StorageData};
@@ -103,10 +103,10 @@ impl Transaction {
                 player.check_and_inc_nonce(self.nonce);
 
                 // 初始化一个牧场给用户
-                // let ranch_count = player.data.ranchs.len();
-                // let ranch_id = ranch_count + 1;
-                // let ranch = Ranch::new(ranch_id as u64);
-                // player.data.ranchs.push(ranch);
+                let ranch_count = player.data.ranchs.len();
+                let ranch_id = ranch_count + 1;
+                let ranch = Ranch::new(ranch_id as u64);
+                player.data.ranchs.push(ranch);
                 player.store();
                 Ok(())
             }
