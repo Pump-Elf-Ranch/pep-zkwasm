@@ -41,7 +41,8 @@ function createCommand(nonce: bigint, command: bigint, objindex: bigint) {
   return (nonce << 16n) + (objindex << 8n) + command;
 }
 
-const rpc = new ZKWasmAppRpc("http://127.0.0.1:3000");
+const rpc = new ZKWasmAppRpc("https://zk-server.pumpelf.ai");
+// const rpc = new ZKWasmAppRpc("http://127.0.0.1:3000");
 
 export class Player {
   processingKey: string;
@@ -231,22 +232,17 @@ export class Player {
 
 
 
-
+  /*
+    (32 bit amount | 32 bit highbit of address)
+    (64 bit mid bit of address (be))
+    (64 bit tail bit of address (be))
+       */
   async withdrawRewards(address: string, amount: bigint) {
     let nonce = await this.getNonce();
     let addressBN = new BN(address, 16);
     let a = addressBN.toArray("be", 20); // 20 bytes = 160 bits and split into 4, 8, 8
-
     console.log("address is", address);
     console.log("address be is", a);
-
-
-    /*
-  (32 bit amount | 32 bit highbit of address)
-  (64 bit mid bit of address (be))
-  (64 bit tail bit of address (be))
-     */
-
 
     let firstLimb = BigInt('0x' + bytesToHex(a.slice(0,4).reverse()));
     let sndLimb = BigInt('0x' + bytesToHex(a.slice(4,12).reverse()));

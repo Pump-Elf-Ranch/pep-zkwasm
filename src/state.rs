@@ -1,19 +1,20 @@
+use crate::config::ADMIN_PUBKEY;
 use crate::elf::{Elf, StandElf};
 use crate::error::*;
 use crate::event_type::{ADD_EXP, ADD_GOLD, ADD_SHIT, HEALTH_ADD, HEALTH_REDUCE, SATIETY_REDUCE};
 use crate::events::Event;
 use crate::player::ElfPlayer;
-use crate::prop::{price_type_gold, Prop, UserProp};
+use crate::prop::{price_type_gold, price_type_usdt, Prop, UserProp};
 use crate::ranch::Ranch;
+use crate::settlement::SettlementInfo;
 use lazy_static::lazy_static;
 use sha2::Digest;
 use std::cell::RefCell;
-use zkwasm_rest_abi::{StorageData};
-use zkwasm_rest_abi::MERKLE_MAP;
-use zkwasm_rest_convention::{EventQueue};
-use crate::settlement::{SettlementInfo};
+use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::WithdrawInfo;
-
+use zkwasm_rest_abi::MERKLE_MAP;
+use zkwasm_rest_convention::EventQueue;
+use zkwasm_rust_sdk::require;
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -43,8 +44,8 @@ const CLEAN_RANCH: u64 = 4; // 清洁牧场
 const TREAT_ELF: u64 = 5; // 治疗宠物
 const SELL_ELF: u64 = 6; // 卖出精灵
 
-const WITHDRAW: u64 = 7; // 充值
-const DEPOSIT: u64 = 8; // 提现
+const WITHDRAW: u64 = 7; // 提现
+const DEPOSIT: u64 = 8; // 充值
 const BOUNTY: u64 = 9;
 const BUY_RANCH: u64 = 10; // 购买牧场
 const COLLECT_GOLD: u64 = 11; // 收集金币
@@ -79,7 +80,7 @@ impl Transaction {
         if command == WITHDRAW {
             data = vec![params[1], params[2], params[3]] // address of withdraw(Note:amount in params[1])
         } else if command == DEPOSIT {
-            data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], amount
+            data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], ranch_id, prop_type
         } else if command == BOUNTY {
             data = vec![params[1]] // pkey[0], pkey[1], amount
         } else {
@@ -538,31 +539,58 @@ impl Transaction {
 
     // 提现
     pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        zkwasm_rust_sdk::dbg!("withdraw\n");
         let mut player = ElfPlayer::get_from_pid(pid);
         match player.as_mut() {
             None => Err(ERROR_PLAYER_NOT_EXIST),
             Some(player) => {
                 player.check_and_inc_nonce(self.nonce);
-               
-                let amount = (self.data[0] & 0xffffffff) as u64;
-
+                let amount = self.data[0] & 0xffffffff;
                 if player.data.gold_balance < amount {
                     return Err(ERROR_NOT_GOLD_BALANCE);
                 }
-
                 let withdrawinfo =
                     WithdrawInfo::new(&[self.data[0], self.data[1], self.data[2]], 0);
                 SettlementInfo::append_settlement(withdrawinfo);
-                // let withdraw = WithdrawInfo::new(
-                //     0,
-                //     0,
-                //     0,
-                //     [amount, 0, 0, 0],
-                //     encode_address(&self.data),
-                // );
-                // SettlementInfo::append_settlement(withdraw);
+                zkwasm_rust_sdk::dbg!("withdraw  amount {:?}\n", amount);
                 player.data.gold_balance -= amount;
                 player.store();
+                Ok(())
+            }
+        }
+    }
+
+    // 充值
+    pub fn deposit(&self, pid: &[u64; 2]) -> Result<(), u32> {
+        zkwasm_rust_sdk::dbg!("deposit\n");
+        // let mut admin = ElfPlayer::get_from_pid(pid).unwrap();
+        // admin.check_and_inc_nonce(self.nonce);
+        let mut player = ElfPlayer::get_from_pid(&[self.data[0], self.data[1]]);
+        match player.as_mut() {
+            None => Err(ERROR_PLAYER_NOT_EXIST),
+            Some(player) => {
+                // 获取牧场id
+                let ranch_id = self.data[2] >> 32; // 获取高32位的ranch_id
+                let prop_type = self.data[2] & 0xffffffff; // 获取低32位的prop_type
+                zkwasm_rust_sdk::dbg!("ranch_id {:?}\n", ranch_id);
+                zkwasm_rust_sdk::dbg!("prop_type {:?}\n", prop_type);
+                {
+                    let ranch = player.data.get_ranch_mut(ranch_id);
+                    if ranch.is_none() {
+                        return Err(ERROR_NOT_FOUND_RANCH);
+                    }
+                }
+                if let Some(prop) = Prop::get_prop_by_type(prop_type) {
+                    if prop.price_type == price_type_usdt {
+                        let user_prop = UserProp::new(prop.prop_type);
+                        player.data.set_prop_by_ranch(ranch_id, user_prop);
+                        player.store();
+                    } else {
+                        return Err(ERROR_THIS_PROP_MUST_BE_USED_USDT);
+                    }
+                } else {
+                    return Err(ERROR_NOT_FOUND_PROP);
+                }
                 Ok(())
             }
         }
@@ -603,12 +631,15 @@ impl Transaction {
             WITHDRAW => self
                 .withdraw(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
+            DEPOSIT => {
+                unsafe { require(*pkey == *ADMIN_PUBKEY) };
+                self.deposit(&ElfPlayer::pkey_to_pid(&pkey))
+                    .map_or_else(|e| e, |_| 0)
+            }
 
             _ => {
-                // unsafe { require(*pkey == *ADMIN_PUBKEY) };
+                unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 // zkwasm_rust_sdk::dbg!("admin {:?}\n", {*ADMIN_PUBKEY});
-                let event_count = STATE.0.borrow().queue.list.len();
-                zkwasm_rust_sdk::dbg!("eventCount {:?}\n", event_count);
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
@@ -641,6 +672,9 @@ impl State {
         serde_json::to_string(&counter).unwrap()
     }
     pub fn get_state(pkey: Vec<u64>) -> String {
+        // zkwasm_rust_sdk::dbg!("pkey {:?}\n", pkey);
+        // let pid = ElfPlayer::pkey_to_pid(&pkey.clone().try_into().unwrap());
+        // zkwasm_rust_sdk::dbg!("pid {:?}\n", pid);
         let player = ElfPlayer::get_from_pid(&ElfPlayer::pkey_to_pid(&pkey.try_into().unwrap()));
         serde_json::to_string(&player).unwrap()
     }
