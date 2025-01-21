@@ -585,6 +585,7 @@ impl Transaction {
                         let user_prop = UserProp::new(prop.prop_type);
                         player.data.set_prop_by_ranch(ranch_id, user_prop);
                         player.store();
+                        admin.store();
                     } else {
                         return Err(ERROR_THIS_PROP_MUST_BE_USED_USDT);
                     }
@@ -594,6 +595,7 @@ impl Transaction {
                 Ok(())
             }
         }
+
     }
 
     // 游戏进程
