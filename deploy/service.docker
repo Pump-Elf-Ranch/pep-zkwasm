@@ -42,7 +42,8 @@ RUN npm install
 
 WORKDIR /usr/src/zkwasm-app
 
-
+ARG SERVER_ADMIN_KEY
+ENV SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY
 RUN make && make publish
 
 WORKDIR /usr/src
