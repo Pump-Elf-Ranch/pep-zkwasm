@@ -1,32 +1,33 @@
 # Use the official Rust image from the Docker Hub
-FROM rust:latest
-# Install Node.js 18.6
+FROM rust:latest AS builder
+# 安装系统依赖
 RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs=18.6.0-1nodesource1
+    apt-get install -y \
+        curl \
+        git \
+        jq \
+        supervisor \
+        cmake \
+        pkg-config \
+        libssl-dev \
+        libclang-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y \
-    git \
-    jq \
-    cmake \
-    pkg-config \
-    libssl-dev \
-    libclang-dev \
-    curl
+# 安装 Node.js 18
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs=18.6.0-1nodesource1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install supervisor
-RUN apt-get update && apt-get install -y supervisor && apt-get clean
 
-# Insell wasm-pack
-RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-# Install wasm-opt
-RUN curl -L https://github.com/WebAssembly/binaryen/releases/download/version_118/binaryen-version_118-x86_64-linux.tar.gz \
-            -o binaryen.tar.gz  \
-            && tar -xzf binaryen.tar.gz \
-            && mv binaryen-version_118/bin/wasm-opt /usr/local/bin/ \
-            && rm -rf binaryen.tar.gz binaryen-version_118
+# 安装 wasm-pack 和 wasm-opt
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && \
+    curl -L https://github.com/WebAssembly/binaryen/releases/download/version_118/binaryen-version_118-x86_64-linux.tar.gz \
+        -o binaryen.tar.gz && \
+    tar -xzf binaryen.tar.gz && \
+    mv binaryen-version_118/bin/wasm-opt /usr/local/bin/ && \
+    rm -rf binaryen.tar.gz binaryen-version_118
 
 
 # Set the working directory inside the container
@@ -38,25 +39,44 @@ WORKDIR /usr/src/zkwasm-app/ts
 
 RUN npm install
 
-WORKDIR /usr/src/zkwasm-app
-
+# 设置构建参数和环境变量
 ARG SERVER_ADMIN_KEY
 ENV SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY
 
+WORKDIR /usr/src/zkwasm-app
 RUN make && make publish > /tmp/publish.log
+# 提取 MD5 值
 RUN MD5_VALUE=$(grep -oP 'Add Image Response \K\{.*?\}' /tmp/publish.log | jq -r '.md5') && \
-    echo "MD5_VALUE=$MD5_VALUE" && export MD5_VALUE
+    echo "MD5_VALUE=$MD5_VALUE" >> /etc/environment && \
+    export MD5_VALUE
 
 ENV IMAGE=$MD5_VALUE
 
+# 复制启动脚本
 WORKDIR /usr/src
-
 RUN cp zkwasm-app/deploy/start.sh ./start.sh
 
+# 复制构建结果到临时目录
+RUN mkdir -p /app/dist && \
+    cp -r zkwasm-app/deploy /app/deploy && \
+    cp -r zkwasm-app/ts /app/ts && \
+    cp start.sh /app/start.sh
+
+# 第二阶段：运行阶段（使用 Node.js 镜像）
+FROM node:18-alpine
+# 设置工作目录
+WORKDIR /app
+
+# 从构建阶段复制运行所需的文件
+COPY --from=builder /app /app
+
+# 安装生产依赖
+WORKDIR /app/ts
+
+# 暴露端口
 EXPOSE 3000
 
-# Run the application
-CMD ["sh", "start.sh"]
-
+# 设置启动命令
+CMD ["sh", "/app/start.sh"]
 
 
