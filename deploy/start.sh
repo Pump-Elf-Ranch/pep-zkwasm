@@ -1,2 +1,2 @@
-node /usr/src/zkwasm-app/ts/src/service.js
+node /app/ts/src/service.js
 

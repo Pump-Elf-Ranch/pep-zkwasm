@@ -44,7 +44,7 @@ ARG SERVER_ADMIN_KEY
 ENV SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY
 
 WORKDIR /usr/src/zkwasm-app
-RUN make && make publish > /tmp/publish.log
+RUN make && make publish
 # 提取 MD5 值
 RUN MD5_VALUE=$(grep -oP 'Add Image Response \K\{.*?\}' /tmp/publish.log | jq -r '.md5') && \
     echo "MD5_VALUE=$MD5_VALUE" >> /etc/environment && \
@@ -57,9 +57,8 @@ WORKDIR /usr/src
 RUN cp zkwasm-app/deploy/start.sh ./start.sh
 
 # 复制构建结果到临时目录
-RUN mkdir -p /app/dist && \
-    cp -r zkwasm-app/deploy /app/deploy && \
-    cp -r zkwasm-app/ts /app/ts && \
+RUN mkdir -p /app && \
+    cp -r zkwasm-app /app && \
     cp start.sh /app/start.sh
 
 # 第二阶段：运行阶段（使用 Node.js 镜像）
