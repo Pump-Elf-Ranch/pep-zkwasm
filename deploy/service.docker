@@ -55,28 +55,27 @@ ENV IMAGE=$MD5_VALUE
 
 # 复制启动脚本
 WORKDIR /usr/src
-RUN cp zkwasm-app/deploy/start.sh ./start.sh
 
 # 复制构建结果到临时目录
 RUN mkdir -p /app && \
-    cp -r zkwasm-app /app && \
-    cp start.sh /app/start.sh
+    cp -r zkwasm-app/* /app && \
+    cp zkwasm-app/deploy/start.sh /app/start.sh
 
 # 第二阶段：运行阶段（使用 Node.js 镜像）
 FROM node:18-alpine
-# 设置工作目录
-WORKDIR /app
+
 
 # 从构建阶段复制运行所需的文件
 COPY --from=builder /app /app
 
-# 安装生产依赖
-WORKDIR /app/ts
+
+# 设置工作目录
+WORKDIR /app
 
 # 暴露端口
 EXPOSE 3000
 
 # 设置启动命令
-CMD ["sh", "/app/start.sh"]
+CMD ["sh", "start.sh"]
 
 
