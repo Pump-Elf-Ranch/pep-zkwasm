@@ -52,7 +52,7 @@ spec:
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
         - args:
-            - zkwasm-app/ts/node_modules/zkwasm-ts-server/src/settle.js
+            - /app/ts/node_modules/zkwasm-ts-server/src/settle.js
           command:
             - node
           env:
