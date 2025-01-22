@@ -45,8 +45,9 @@ ENV SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY
 
 WORKDIR /usr/src/zkwasm-app
 RUN make && make publish
+RUN cat publish.log
 # 提取 MD5 值
-RUN MD5_VALUE=$(grep -oP 'Add Image Response \K\{.*?\}' /tmp/publish.log | jq -r '.md5') && \
+RUN MD5_VALUE=$(grep -oP 'Add Image Response \K\{.*?\}' publish.log | jq -r '.md5') && \
     echo "MD5_VALUE=$MD5_VALUE" >> /etc/environment && \
     export MD5_VALUE
 
