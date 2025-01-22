@@ -562,7 +562,7 @@ impl Transaction {
 
     // 充值
     pub fn deposit(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        zkwasm_rust_sdk::dbg!("deposit start one \n");
+        zkwasm_rust_sdk::dbg!("deposit start o \n");
         let mut admin = ElfPlayer::get_from_pid(pid).unwrap();
         admin.check_and_inc_nonce(self.nonce);
         let mut player = ElfPlayer::get_from_pid(&[self.data[0], self.data[1]]);
