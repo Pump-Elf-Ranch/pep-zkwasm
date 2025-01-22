@@ -674,9 +674,6 @@ impl State {
         serde_json::to_string(&counter).unwrap()
     }
     pub fn get_state(pkey: Vec<u64>) -> String {
-        // zkwasm_rust_sdk::dbg!("pkey {:?}\n", pkey);
-        // let pid = ElfPlayer::pkey_to_pid(&pkey.clone().try_into().unwrap());
-        // zkwasm_rust_sdk::dbg!("pid {:?}\n", pid);
         let player = ElfPlayer::get_from_pid(&ElfPlayer::pkey_to_pid(&pkey.try_into().unwrap()));
         serde_json::to_string(&player).unwrap()
     }

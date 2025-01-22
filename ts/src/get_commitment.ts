@@ -29,7 +29,7 @@ export async function getImageCommitmentHexStrings(imageHash: string): Promise<s
 }
 
 async function main() {
-    let md5_hash = "628A9F13BE1FA4051C70792ECB15F749"
+    let md5_hash = "5D34C09306A93AE081C5C1116BC669CD"
     let result = await getImageCommitmentHexStrings(md5_hash);
     console.log("commitment result:",result);
 }

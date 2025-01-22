@@ -6,11 +6,9 @@ RUN apt-get update && \
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs=18.6.0-1nodesource1
 
-# Install Git
-RUN apt-get update && apt-get install -y git
-
 RUN apt-get update && apt-get install -y \
     git \
+    jq \
     cmake \
     pkg-config \
     libssl-dev \
@@ -44,7 +42,12 @@ WORKDIR /usr/src/zkwasm-app
 
 ARG SERVER_ADMIN_KEY
 ENV SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY
-RUN make && make publish
+
+RUN make && make publish > /tmp/publish.log
+RUN MD5_VALUE=$(grep -oP 'Add Image Response \K\{.*?\}' /tmp/publish.log | jq -r '.md5') && \
+    echo "MD5_VALUE=$MD5_VALUE" && export MD5_VALUE
+
+ENV IMAGE=$MD5_VALUE
 
 WORKDIR /usr/src
 
