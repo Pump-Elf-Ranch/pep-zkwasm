@@ -36,9 +36,9 @@ jobs:
           docker push ${IMAGE_URL}
       - name: Update Deploy Version
         run: |
-          sed -i 's/{{IMAGE_VERSION}}/${{ steps.get-commit-sha.outputs.sha }}/g' apply.yaml
-          sed -i 's/{{SETTLER_PRIVATE_ACCOUNT}}/${{ secrets.SETTLER_PRIVATE_ACCOUNT }}/g' apply.yaml
-          sed -i 's/{{RPC_URL}}/${{ secrets.RPC_URL }}/g' apply.yaml
+          sed -i 's|{{IMAGE_VERSION}}|${{ steps.get-commit-sha.outputs.sha }}|g' apply.yaml
+          sed -i 's|{{SETTLER_PRIVATE_ACCOUNT}}|${{ secrets.SETTLER_PRIVATE_ACCOUNT }}|g' apply.yaml
+          sed -i 's|{{RPC_URL}}|${{ secrets.RPC_URL }}|g' apply.yaml
 
       - name: Deploy to k3s
         uses: steebchen/kubectl@master
