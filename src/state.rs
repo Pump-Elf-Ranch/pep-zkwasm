@@ -562,7 +562,7 @@ impl Transaction {
 
     // 充值
     pub fn deposit(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        zkwasm_rust_sdk::dbg!("deposit\n");
+        zkwasm_rust_sdk::dbg!("deposit start \n");
         let mut admin = ElfPlayer::get_from_pid(pid).unwrap();
         admin.check_and_inc_nonce(self.nonce);
         let mut player = ElfPlayer::get_from_pid(&[self.data[0], self.data[1]]);
@@ -674,7 +674,6 @@ impl State {
         serde_json::to_string(&counter).unwrap()
     }
     pub fn get_state(pkey: Vec<u64>) -> String {
-        zkwasm_rust_sdk::dbg!("get_state\n");
         let player = ElfPlayer::get_from_pid(&ElfPlayer::pkey_to_pid(&pkey.try_into().unwrap()));
         serde_json::to_string(&player).unwrap()
     }
