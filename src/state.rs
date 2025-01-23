@@ -641,7 +641,7 @@ impl Transaction {
 
             _ => {
                 unsafe { require(*pkey == *ADMIN_PUBKEY) };
-                zkwasm_rust_sdk::dbg!("admin tick st \n");
+                zkwasm_rust_sdk::dbg!("admin tick sts \n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
