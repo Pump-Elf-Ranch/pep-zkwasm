@@ -1,3 +1,3 @@
-source /app/env.sh
+source env.sh
 node ts/src/service.js
 
