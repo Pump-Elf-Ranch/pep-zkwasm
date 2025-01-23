@@ -58,8 +58,8 @@ RUN mkdir -p /app && \
     sed -n '/Add Image Response/{s/Add Image Response //;:a;N;/}/!ba;p}' /app/publish.log | \
     sed "s/'/\"/g" | sed "s/\([a-zA-Z0-9_]\+\):/\"\1\":/" > /app/publish.json && \
     IMAGE=$(jq -r '.md5' /app/publish.json) && \
-    echo "IMAGE=$IMAGE" > /app/env.sh && \
-    echo "SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/env.sh && \
+    echo "export IMAGE=$IMAGE" > /app/env.sh && \
+    echo "export SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/env.sh && \
     cp zkwasm-app/deploy/start.sh /app/start.sh
 
 
@@ -79,6 +79,7 @@ WORKDIR /app
 # 加载环境变量
 RUN chmod +x env.sh && \
     source env.sh && \
+    cat env.sh && \
     env > /etc/environment
 
 # 暴露端口

@@ -6,7 +6,7 @@ import { U8ArrayUtil } from 'zkwasm-ts-server/src/lib.js';
 
 async function main( ) {
 
-    let taskid = "678fd6207893e0306e5b3ff1"
+    let taskid = "67924bde7893e0306e5b4c96"
     let task = await get_latest_proof(taskid);
     console.log("latest taskId got from remote:", task?._id);
     console.log("latest task", task?.instances);
