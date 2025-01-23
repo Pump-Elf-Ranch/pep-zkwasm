@@ -85,6 +85,6 @@ WORKDIR /app
 EXPOSE 3000
 
 # 设置启动命令
-CMD ["sh", "start.sh"]
+CMD ["sh", "-c", ". /app/env.sh && sh start.sh"]
 
 
