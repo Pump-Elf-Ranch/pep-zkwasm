@@ -41,8 +41,8 @@ function createCommand(nonce: bigint, command: bigint, objindex: bigint) {
   return (nonce << 16n) + (objindex << 8n) + command;
 }
 
-const rpc = new ZKWasmAppRpc("https://zk-server.pumpelf.ai");
-// const rpc = new ZKWasmAppRpc("http://127.0.0.1:3000");
+// const rpc = new ZKWasmAppRpc("https://zk-server.pumpelf.ai");
+const rpc = new ZKWasmAppRpc("http://127.0.0.1:3000");
 
 export class Player {
   processingKey: string;
