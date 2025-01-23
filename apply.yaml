@@ -52,9 +52,11 @@ spec:
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
         - args:
-            - /app/ts/node_modules/zkwasm-ts-server/src/settle.js
+            - source env.sh && node
+              /app/ts/node_modules/zkwasm-ts-server/src/settle.js
           command:
-            - node
+            - sh
+            - '-c'
           env:
             - name: SETTLEMENT_CONTRACT_ADDRESS
               value: '0x85d56DA855E85154c23eBC3D9E6FcD7dB348019C'
