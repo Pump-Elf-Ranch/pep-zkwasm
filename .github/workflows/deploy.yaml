@@ -44,4 +44,4 @@ jobs:
         uses: steebchen/kubectl@master
         with:
           config: ${{ secrets.DOCKER_KUBE }}
-          command: apply -f apply.yaml
+          command: apply -f apply.yaml --force
