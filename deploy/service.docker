@@ -58,8 +58,8 @@ RUN mkdir -p /app && \
     sed -n '/Add Image Response/{s/Add Image Response //;:a;N;/}/!ba;p}' /app/publish.log | \
     sed "s/'/\"/g" | sed "s/\([a-zA-Z0-9_]\+\):/\"\1\":/" > /app/publish.json && \
     IMAGE=$(jq -r '.md5' /app/publish.json) && \
-    echo "IMAGE=$IMAGE" > /app/.env && \
-    echo "SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/.env && \
+    echo "IMAGE=$IMAGE" > /app/env.list && \
+    echo "SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/env.list && \
     cp zkwasm-app/deploy/start.sh /app/start.sh
 
 
@@ -71,13 +71,13 @@ FROM node:18-alpine
 COPY --from=builder /app /app
 
 # 从构建阶段复制环境变量文件
-COPY --from=builder /app/.env /app/.env
+COPY --from=builder /app/env.list /app/env.list
 
 # 设置工作目录
 WORKDIR /app
 
-RUN cp .env ts/node_modules/zkwasm-ts-server/.env
-
+ARG ENV_VARS="$(cat /app/env.list | tr '\n' ' ')"
+ENV ${ENV_VARS}
 # 暴露端口
 EXPOSE 3000
 
