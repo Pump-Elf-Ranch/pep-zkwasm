@@ -54,7 +54,8 @@ WORKDIR /usr/src
 # 复制构建结果到临时目录
 RUN mkdir -p /app && \
     cp -r zkwasm-app/* /app && \
-    IMAGE=$(grep -oP 'Add Image Response \K\{.*?\}' publish.log | jq -r '.md5') && \
+    sed -n '/Add Image Response/{s/Add Image Response //;:a;N;/}/!ba;p}' publish.log > publish.json && \
+    IMAGE=$(cat publish.json | jq -r '.md5') && \
     echo "IMAGE=$IMAGE" > /app/env.sh && \
     echo "SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/env.sh && \
     cp zkwasm-app/deploy/start.sh /app/start.sh
