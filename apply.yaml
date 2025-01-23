@@ -70,8 +70,6 @@ spec:
               value: 'http://zkdb:3030'
             - name: DEPLOY
               value: 'true'
-            - name: SERVER_ADMIN_KEY
-              value: '{{SERVER_ADMIN_KEY}}'
 
           image: >-
             registry.ap-northeast-1.aliyuncs.com/omni-new/per-zkwasm-server:{{IMAGE_VERSION}}
