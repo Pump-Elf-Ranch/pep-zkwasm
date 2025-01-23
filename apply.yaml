@@ -40,8 +40,6 @@ spec:
               value: {{SETTLER_PRIVATE_ACCOUNT}}
             - name: RPC_PROVIDER
               value: {{RPC_URL}}
-            - name: SERVER_ADMIN_KEY
-              value: {{SERVER_ADMIN_KEY}}
           image: >-
             registry.ap-northeast-1.aliyuncs.com/omni-new/per-zkwasm-server:{{IMAGE_VERSION}}
           imagePullPolicy: IfNotPresent
@@ -72,6 +70,9 @@ spec:
               value: 'http://zkdb:3030'
             - name: DEPLOY
               value: 'true'
+            - name: SERVER_ADMIN_KEY
+              value: {{SERVER_ADMIN_KEY}}
+
           image: >-
             registry.ap-northeast-1.aliyuncs.com/omni-new/per-zkwasm-server:{{IMAGE_VERSION}}
           imagePullPolicy: IfNotPresent

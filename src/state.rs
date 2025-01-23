@@ -69,6 +69,7 @@ impl Transaction {
             ERROR_THIS_PROP_MUST_BE_USED_USDT => "ThisPropMustBeUsedUSDT",
             ERROR_INVALID_PURCHASE_CONDITION => "InvalidPurchaseCondition",
             ERROR_MAX_ELF_SLOT => "MaxElfSlot",
+            ERRor_MUST_ADMIN_KEY => "MustAdminKey",
             _ => "Unknown",
         }
     }
@@ -595,7 +596,12 @@ impl Transaction {
                 Ok(())
             }
         }
+    }
 
+    pub fn check_admin(&self, pkey: &[u64; 4] ) {
+        if *pkey != *ADMIN_PUBKEY {
+            Err(ERROR_PLAYER_NOT_EXIST).map_or_else(|e| e, |_| 0);
+        }
     }
 
     // 游戏进程
@@ -634,20 +640,21 @@ impl Transaction {
                 .withdraw(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             DEPOSIT => {
-                unsafe { require(*pkey == *ADMIN_PUBKEY) };
+                self.check_admin(pkey);
                 self.deposit(&ElfPlayer::pkey_to_pid(&pkey))
                     .map_or_else(|e| e, |_| 0)
             }
 
             _ => {
-                unsafe { require(*pkey == *ADMIN_PUBKEY) };
-                zkwasm_rust_sdk::dbg!("admin tick sts8 \n");
+                self.check_admin(pkey);
+                zkwasm_rust_sdk::dbg!("admin tick s1 \n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
         };
         b
     }
+
 }
 
 pub struct SafeState(RefCell<State>);
