@@ -598,12 +598,6 @@ impl Transaction {
         }
     }
 
-    pub fn check_admin(&self, pkey: &[u64; 4] ) {
-        if *pkey != *ADMIN_PUBKEY {
-            Err(ERROR_PLAYER_NOT_EXIST).map_or_else(|e| e, |_| 0);
-        }
-    }
-
     // 游戏进程
     pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
         zkwasm_rust_sdk::dbg!("rand {:?}\n", { sigr });
@@ -640,19 +634,26 @@ impl Transaction {
                 .withdraw(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             DEPOSIT => {
-                self.check_admin(pkey);
+                self.check_admin(pkey).map_or_else(|e| e, |_| 0);
                 self.deposit(&ElfPlayer::pkey_to_pid(&pkey))
                     .map_or_else(|e| e, |_| 0)
             }
 
             _ => {
-                self.check_admin(pkey);
+                self.check_admin(pkey).map_or_else(|e| e, |_| 0);
                 zkwasm_rust_sdk::dbg!("admin tick s1 \n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
         };
         b
+    }
+
+    pub fn check_admin(&self, pkey: &[u64; 4]) -> Result<(), u32> {
+        if *pkey != *ADMIN_PUBKEY {
+            return Err(ERROR_PLAYER_NOT_EXIST);
+        }
+        Ok(())
     }
 
 }
