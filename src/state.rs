@@ -641,7 +641,7 @@ impl Transaction {
 
             _ => {
                 self.check_admin(pkey).map_or_else(|e| e, |_| 0);
-                zkwasm_rust_sdk::dbg!("admin tick good \n");
+                zkwasm_rust_sdk::dbg!("admin tick update \n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
