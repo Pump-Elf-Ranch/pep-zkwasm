@@ -1,2 +1,2 @@
-node /app/ts/src/service.js
+node ts/src/service.js
 
