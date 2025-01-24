@@ -8,13 +8,11 @@ use crate::prop::{price_type_gold, price_type_usdt, Prop, UserProp};
 use crate::ranch::Ranch;
 use crate::settlement::SettlementInfo;
 use lazy_static::lazy_static;
-use sha2::Digest;
 use std::cell::RefCell;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::WithdrawInfo;
 use zkwasm_rest_abi::MERKLE_MAP;
 use zkwasm_rest_convention::EventQueue;
-use zkwasm_rust_sdk::require;
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -31,7 +29,6 @@ fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S
 
 pub struct Transaction {
     pub command: u64,
-    pub objindex: usize,
     pub nonce: u64,
     pub data: Vec<u64>,
 }
@@ -73,13 +70,12 @@ impl Transaction {
             _ => "Unknown",
         }
     }
-    pub fn decode(params: [u64; 4]) -> Self {
+    pub fn decode(params: &[u64]) -> Self {
         let command = params[0] & 0xff;
-        let objindex = ((params[0] >> 8) & 0xff) as usize;
         let nonce = params[0] >> 16;
         let mut data = vec![];
         if command == WITHDRAW {
-            data = vec![params[1], params[2], params[3]] // address of withdraw(Note:amount in params[1])
+            data = vec![params[2], params[3], params[4]] // address of withdraw(Note:amount in params[1])
         } else if command == DEPOSIT {
             data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], ranch_id, prop_type
         } else if command == BOUNTY {
@@ -90,7 +86,6 @@ impl Transaction {
 
         Transaction {
             command,
-            objindex,
             nonce,
             data,
         }
@@ -599,9 +594,9 @@ impl Transaction {
     }
 
     // 游戏进程
-    pub fn process(&self, pkey: &[u64; 4], sigr: &[u64; 4]) -> u32 {
-        zkwasm_rust_sdk::dbg!("rand {:?}\n", { sigr });
-        let rand = sigr[0] ^ sigr[1] ^ sigr[2] ^ sigr[3];
+    pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> Vec<u64> {
+        zkwasm_rust_sdk::dbg!("rand {:?}\n", { rand });
+        let rand = rand[0] ^ rand[1] ^ rand[2] ^ rand[3];
         let b = match self.command {
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
@@ -634,19 +629,19 @@ impl Transaction {
                 .withdraw(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             DEPOSIT => {
-                self.check_admin(pkey).map_or_else(|e| e, |_| 0);
+                // self.check_admin(pkey).map_or_else(|e| e, |_| 0);
                 self.deposit(&ElfPlayer::pkey_to_pid(&pkey))
                     .map_or_else(|e| e, |_| 0)
             }
 
             _ => {
-                self.check_admin(pkey).map_or_else(|e| e, |_| 0);
+                // self.check_admin(pkey).map_or_else(|e| e, |_| 0);
                 zkwasm_rust_sdk::dbg!("admin tick g \n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
         };
-        b
+        vec![b as u64]
     }
 
     pub fn check_admin(&self, pkey: &[u64; 4]) -> Result<(), u32> {

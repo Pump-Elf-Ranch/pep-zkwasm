@@ -54,12 +54,12 @@ WORKDIR /usr/src
 # 复制构建结果到临时目录
 RUN mkdir -p /app && \
     cp -r zkwasm-app/* /app && \
-    ls -l /app &&\
     sed -n '/Add Image Response/{s/Add Image Response //;:a;N;/}/!ba;p}' /app/publish.log | \
     sed "s/'/\"/g" | sed "s/\([a-zA-Z0-9_]\+\):/\"\1\":/" > /app/publish.json && \
     IMAGE=$(jq -r '.md5' /app/publish.json) && \
-    echo "export IMAGE=$IMAGE" > /app/.env && \
-    echo "export SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/.env && \
+    echo "IMAGE=$IMAGE" > /app/.env && \
+    echo "SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/.env && \
+    ls -l /app && \
     cp zkwasm-app/deploy/start.sh /app/start.sh
 
 
@@ -70,9 +70,6 @@ FROM node:18-alpine
 # 从构建阶段复制运行所需的文件
 COPY --from=builder /app /app
 
-# 从构建阶段复制环境变量文件
-COPY --from=builder /app/.env /app/.env
-
 # 设置工作目录
 WORKDIR /app
 
@@ -80,5 +77,5 @@ WORKDIR /app
 EXPOSE 3000
 
 # 设置启动命令
-CMD ["sh" ,"-c","source .env && sh start.sh"]
+CMD ["sh" ,"start.sh"]
 
