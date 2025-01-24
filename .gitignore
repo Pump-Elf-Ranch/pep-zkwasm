@@ -8,3 +8,4 @@ pkg
 **/admin.prikey
 ts/package-lock.json
 .env
+publish.log
