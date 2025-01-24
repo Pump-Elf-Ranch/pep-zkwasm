@@ -7,3 +7,4 @@ pkg
 .vscode
 **/admin.prikey
 ts/package-lock.json
+.env

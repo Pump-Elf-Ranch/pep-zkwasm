@@ -73,13 +73,16 @@ impl Transaction {
     pub fn decode(params: &[u64]) -> Self {
         let command = params[0] & 0xff;
         let nonce = params[0] >> 16;
+        zkwasm_rust_sdk::dbg!("command {:?}\n", command);
+        zkwasm_rust_sdk::dbg!("params {:?}\n", params);
+        zkwasm_rust_sdk::dbg!("nonce {:?}\n", nonce);
         let mut data = vec![];
         if command == WITHDRAW {
-            data = vec![params[2], params[3], params[4]] // address of withdraw(Note:amount in params[1])
+            data = vec![params[2], params[3], params[4]]
         } else if command == DEPOSIT {
-            data = vec![params[1], params[2], params[3]] // pkey[0], pkey[1], ranch_id, prop_type
+            data = vec![params[1], params[2], params[3], params[4]]
         } else if command == BOUNTY {
-            data = vec![params[1]] // pkey[0], pkey[1], amount
+            data = vec![params[1]]
         } else {
             data = vec![params[1], params[2], params[3]]
         };
@@ -548,7 +551,7 @@ impl Transaction {
                 let withdrawinfo =
                     WithdrawInfo::new(&[self.data[0], self.data[1], self.data[2]], 0);
                 SettlementInfo::append_settlement(withdrawinfo);
-                zkwasm_rust_sdk::dbg!("withdraw  amount {:?}\n", amount);
+                zkwasm_rust_sdk::dbg!("withdraw amount {:?}\n", amount);
                 player.data.gold_balance -= amount;
                 player.store();
                 Ok(())
@@ -566,8 +569,8 @@ impl Transaction {
             None => Err(ERROR_PLAYER_NOT_EXIST),
             Some(player) => {
                 // 获取牧场id
-                let ranch_id = self.data[2] >> 32; // 获取高32位的ranch_id
-                let prop_type = self.data[2] & 0xffffffff; // 获取低32位的prop_type
+                let ranch_id = self.data[2] ; // 获取ranch_id
+                let prop_type = self.data[4] ; // 获取prop_type
                 zkwasm_rust_sdk::dbg!("ranch_id {:?}\n", ranch_id);
                 zkwasm_rust_sdk::dbg!("prop_type {:?}\n", prop_type);
                 {
@@ -597,6 +600,7 @@ impl Transaction {
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> Vec<u64> {
         zkwasm_rust_sdk::dbg!("rand {:?}\n", { rand });
         let rand = rand[0] ^ rand[1] ^ rand[2] ^ rand[3];
+        zkwasm_rust_sdk::dbg!(" process command  {:?}\n", { self.command });
         let b = match self.command {
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
