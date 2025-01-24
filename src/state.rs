@@ -554,7 +554,7 @@ impl Transaction {
 
     // 提现
     pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        zkwasm_rust_sdk::dbg!("withdraw\n");
+        zkwasm_rust_sdk::dbg!("withdraw start\n");
         let mut player = ElfPlayer::get_from_pid(pid);
         match player.as_mut() {
             None => Err(ERROR_PLAYER_NOT_EXIST),
@@ -652,8 +652,8 @@ impl Transaction {
             }
 
             _ => {
-                // self.check_admin(pkey).map_or_else(|e| e, |_| 0);
-                zkwasm_rust_sdk::dbg!("admin tick g \n");
+                self.check_admin(pkey).map_or_else(|e| e, |_| 0);
+                zkwasm_rust_sdk::dbg!("admin tick go go \n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }

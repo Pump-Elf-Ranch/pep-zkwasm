@@ -58,6 +58,7 @@ RUN mkdir -p /app && \
     sed "s/'/\"/g" | sed "s/\([a-zA-Z0-9_]\+\):/\"\1\":/" > /app/publish.json && \
     IMAGE=$(jq -r '.md5' /app/publish.json) && \
     echo "IMAGE=$IMAGE" > /app/.env && \
+    echo "SETUP=TRUE" >> /app/.env && \
     echo "SERVER_ADMIN_KEY=$SERVER_ADMIN_KEY" >> /app/.env && \
     ls -l /app && \
     cp zkwasm-app/deploy/start.sh /app/start.sh
