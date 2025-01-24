@@ -17,3 +17,5 @@ pub const ERROR_NOT_FOUND_PROP: u32 = 10;
 pub const  ERROR_THIS_PROP_MUST_BE_USED_USDT: u32 = 11;
 
 pub const  ERROR_MAX_ELF_SLOT: u32 = 12;
+
+pub const  ERROR_MUST_ADMIN_KEY:u32 =13;

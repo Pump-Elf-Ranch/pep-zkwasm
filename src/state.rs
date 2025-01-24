@@ -66,26 +66,42 @@ impl Transaction {
             ERROR_THIS_PROP_MUST_BE_USED_USDT => "ThisPropMustBeUsedUSDT",
             ERROR_INVALID_PURCHASE_CONDITION => "InvalidPurchaseCondition",
             ERROR_MAX_ELF_SLOT => "MaxElfSlot",
-            ERRor_MUST_ADMIN_KEY => "MustAdminKey",
+            ERROR_MUST_ADMIN_KEY => "MustAdminKey",
             _ => "Unknown",
         }
     }
     pub fn decode(params: &[u64]) -> Self {
+        zkwasm_rust_sdk::dbg!("params {:?}\n", params);
         let command = params[0] & 0xff;
         let nonce = params[0] >> 16;
-        zkwasm_rust_sdk::dbg!("command {:?}\n", command);
-        zkwasm_rust_sdk::dbg!("params {:?}\n", params);
-        zkwasm_rust_sdk::dbg!("nonce {:?}\n", nonce);
         let mut data = vec![];
         if command == WITHDRAW {
             data = vec![params[2], params[3], params[4]]
         } else if command == DEPOSIT {
-            data = vec![params[1], params[2], params[3], params[4]]
+            data = vec![params[1], params[2], params[3], params[4]];
         } else if command == BOUNTY {
             data = vec![params[1]]
-        } else {
+        } else if command == INIT_PLAYER {
+            data = vec![];
+        } else if command == BUY_ELF {
+            data = vec![params[1], params[2]]
+        } else if command == FEED_ELF {
             data = vec![params[1], params[2], params[3]]
-        };
+        } else if command == CLEAN_RANCH {
+            data = vec![params[1]]
+        } else if command == TREAT_ELF {
+            data = vec![params[1], params[2], params[3]]
+        } else if command == SELL_ELF {
+            data = vec![params[1], params[2]]
+        } else if command == BUY_RANCH {
+            data = vec![params[1]]
+        } else if command == COLLECT_GOLD {
+            data = vec![params[1], params[2]]
+        } else if command == BUY_SLOT {
+            data = vec![params[1]]
+        } else if command == BUY_PROP {
+            data = vec![params[1], params[2]]
+        }
 
         Transaction {
             command,
@@ -561,7 +577,6 @@ impl Transaction {
 
     // 充值
     pub fn deposit(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        zkwasm_rust_sdk::dbg!("deposit start n \n");
         let mut admin = ElfPlayer::get_from_pid(pid).unwrap();
         admin.check_and_inc_nonce(self.nonce);
         let mut player = ElfPlayer::get_from_pid(&[self.data[0], self.data[1]]);
@@ -569,10 +584,10 @@ impl Transaction {
             None => Err(ERROR_PLAYER_NOT_EXIST),
             Some(player) => {
                 // 获取牧场id
-                let ranch_id = self.data[2] ; // 获取ranch_id
-                let prop_type = self.data[4] ; // 获取prop_type
-                zkwasm_rust_sdk::dbg!("ranch_id {:?}\n", ranch_id);
-                zkwasm_rust_sdk::dbg!("prop_type {:?}\n", prop_type);
+                let ranch_id = self.data[2]; // 获取ranch_id
+                let prop_type = self.data[3]; // 获取prop_type
+                zkwasm_rust_sdk::dbg!("deposit ranch_id {:?}\n", ranch_id);
+                zkwasm_rust_sdk::dbg!("deposit prop_type {:?}\n", prop_type);
                 {
                     let ranch = player.data.get_ranch_mut(ranch_id);
                     if ranch.is_none() {
@@ -598,9 +613,7 @@ impl Transaction {
 
     // 游戏进程
     pub fn process(&self, pkey: &[u64; 4], rand: &[u64; 4]) -> Vec<u64> {
-        zkwasm_rust_sdk::dbg!("rand {:?}\n", { rand });
         let rand = rand[0] ^ rand[1] ^ rand[2] ^ rand[3];
-        zkwasm_rust_sdk::dbg!(" process command  {:?}\n", { self.command });
         let b = match self.command {
             INIT_PLAYER => self
                 .install_player(&ElfPlayer::pkey_to_pid(&pkey))
@@ -633,7 +646,7 @@ impl Transaction {
                 .withdraw(&ElfPlayer::pkey_to_pid(&pkey))
                 .map_or_else(|e| e, |_| 0),
             DEPOSIT => {
-                // self.check_admin(pkey).map_or_else(|e| e, |_| 0);
+                self.check_admin(pkey).map_or_else(|e| e, |_| 0);
                 self.deposit(&ElfPlayer::pkey_to_pid(&pkey))
                     .map_or_else(|e| e, |_| 0)
             }
@@ -650,11 +663,10 @@ impl Transaction {
 
     pub fn check_admin(&self, pkey: &[u64; 4]) -> Result<(), u32> {
         if *pkey != *ADMIN_PUBKEY {
-            return Err(ERROR_PLAYER_NOT_EXIST);
+            return Err(ERROR_MUST_ADMIN_KEY);
         }
         Ok(())
     }
-
 }
 
 pub struct SafeState(RefCell<State>);
@@ -701,6 +713,11 @@ impl State {
     pub fn rand_seed() -> u64 {
         0
     }
+
+    pub fn autotick() -> bool {
+        false
+    }
+
     pub fn settle(&mut self, rand: u64) {}
 
     pub fn hash_event_contains(event: Event) -> bool {

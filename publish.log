@@ -1,0 +1,11 @@
+secp256k1 unavailable, reverting to browser version
+Begin adding image for  /home/tian/code/pep/pep-zkwasm/pkg/application_bg.wasm
+msg is: application_bg.wasmb48621b4075eeadafa797ca5cb2f62560xd8f157cc95bc40b4f0b58eb48046febedbf26bdeMulti User App22Default11155111Anyone
+Run success.
+signature is: 0x15a70121866c6511e2416832c0f5761bf2f96c073472283d807d99a9c09b612525b5b962e3151785b31c886e6f3070932f44d80cf6ba705719423c47f5f51e641c
+get addNewWasmImage response: [object Object]
+Add Image Response {
+  md5: 'B48621B4075EEADAFA797CA5CB2F6256',
+  id: '6793a2177893e0306e5b5358'
+}
+Finish addNewWasmImage!

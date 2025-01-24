@@ -25,7 +25,7 @@ impl Default for PlayerData {
             clean_count: 0,
             feed_count: 0,
             health_count: 0,
-            gold_balance: 120, // 新用户默认给120个金币
+            gold_balance: 10000, // 新用户默认给120个金币
             ranchs: vec![],
         }
     }
