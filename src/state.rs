@@ -6,13 +6,12 @@ use crate::events::Event;
 use crate::player::ElfPlayer;
 use crate::prop::{price_type_gold, price_type_usdt, Prop, UserProp};
 use crate::ranch::Ranch;
-use crate::settlement::SettlementInfo;
 use lazy_static::lazy_static;
 use std::cell::RefCell;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::WithdrawInfo;
 use zkwasm_rest_abi::MERKLE_MAP;
-use zkwasm_rest_convention::EventQueue;
+use zkwasm_rest_convention::{EventQueue, SettlementInfo};
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -653,7 +652,7 @@ impl Transaction {
 
             _ => {
                 self.check_admin(pkey).map_or_else(|e| e, |_| 0);
-                zkwasm_rust_sdk::dbg!("admin tick 1 to go \n");
+                zkwasm_rust_sdk::dbg!("admin auto tick\n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
@@ -712,10 +711,6 @@ impl State {
 
     pub fn rand_seed() -> u64 {
         0
-    }
-
-    pub fn autotick() -> bool {
-        false
     }
 
     pub fn settle(&mut self, rand: u64) {}
