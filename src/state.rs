@@ -698,7 +698,7 @@ impl State {
 
     pub fn preempt() -> bool {
         let counter = STATE.0.borrow().queue.counter;
-        if counter % 32 == 0 {
+        if counter % 16 == 0 {
             true
         } else {
             false
@@ -712,8 +712,6 @@ impl State {
     pub fn rand_seed() -> u64 {
         0
     }
-
-    pub fn settle(&mut self, rand: u64) {}
 
     pub fn hash_event_contains(event: Event) -> bool {
         let state = STATE.0.borrow();
