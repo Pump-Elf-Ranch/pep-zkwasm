@@ -554,7 +554,7 @@ impl Transaction {
 
     // 提现
     pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        zkwasm_rust_sdk::dbg!("withdraw start4 \n");
+        zkwasm_rust_sdk::dbg!("withdraw start go \n");
         let mut player = ElfPlayer::get_from_pid(pid);
         match player.as_mut() {
             None => Err(ERROR_PLAYER_NOT_EXIST),
