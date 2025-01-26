@@ -698,7 +698,7 @@ impl State {
 
     pub fn preempt() -> bool {
         let counter = STATE.0.borrow().queue.counter;
-        if counter % 5 == 0 {
+        if counter % 10 == 0 {
             true
         } else {
             false
