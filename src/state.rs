@@ -652,7 +652,7 @@ impl Transaction {
 
             _ => {
                 self.check_admin(pkey).map_or_else(|e| e, |_| 0);
-                zkwasm_rust_sdk::dbg!("admin auto tick\n");
+                zkwasm_rust_sdk::dbg!("gei lao zi run tick\n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
@@ -698,7 +698,7 @@ impl State {
 
     pub fn preempt() -> bool {
         let counter = STATE.0.borrow().queue.counter;
-        if counter % 16 == 0 {
+        if counter % 5 == 0 {
             true
         } else {
             false
