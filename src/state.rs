@@ -652,7 +652,7 @@ impl Transaction {
 
             _ => {
                 self.check_admin(pkey).map_or_else(|e| e, |_| 0);
-                zkwasm_rust_sdk::dbg!("gei lao zi run tick\n");
+                zkwasm_rust_sdk::dbg!("to run tick\n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
