@@ -171,7 +171,7 @@ impl Transaction {
                     zkwasm_rust_sdk::dbg!("init_event start\n");
                     // 初始化宠物事件
                     self.init_event(*pid, ranch_id, elf_event);
-                    zkwasm_rust_sdk::dbg!("buy elf \n");
+                    zkwasm_rust_sdk::dbg!("buy elf ok \n");
                     Ok(())
                 } else {
                     Err(ERROR_NOT_FOUND_RANCH)
