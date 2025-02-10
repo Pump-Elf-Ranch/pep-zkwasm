@@ -6,13 +6,12 @@ use crate::events::Event;
 use crate::player::ElfPlayer;
 use crate::prop::{price_type_gold, price_type_usdt, Prop, UserProp};
 use crate::ranch::Ranch;
-use crate::settlement::SettlementInfo;
 use lazy_static::lazy_static;
 use std::cell::RefCell;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_abi::WithdrawInfo;
 use zkwasm_rest_abi::MERKLE_MAP;
-use zkwasm_rest_convention::EventQueue;
+use zkwasm_rest_convention::{EventQueue, SettlementInfo};
 /*
 // Custom serializer for `[u64; 4]` as a [String; 4].
 fn serialize_u64_array_as_string<S>(value: &[u64; 4], serializer: S) -> Result<S::Ok, S::Error>
@@ -172,7 +171,7 @@ impl Transaction {
                     zkwasm_rust_sdk::dbg!("init_event start\n");
                     // 初始化宠物事件
                     self.init_event(*pid, ranch_id, elf_event);
-                    zkwasm_rust_sdk::dbg!("buy elf \n");
+                    zkwasm_rust_sdk::dbg!("buy elf ok \n");
                     Ok(())
                 } else {
                     Err(ERROR_NOT_FOUND_RANCH)
@@ -554,7 +553,7 @@ impl Transaction {
 
     // 提现
     pub fn withdraw(&self, pid: &[u64; 2]) -> Result<(), u32> {
-        zkwasm_rust_sdk::dbg!("withdraw start\n");
+        zkwasm_rust_sdk::dbg!("withdraw start go \n");
         let mut player = ElfPlayer::get_from_pid(pid);
         match player.as_mut() {
             None => Err(ERROR_PLAYER_NOT_EXIST),
@@ -653,7 +652,7 @@ impl Transaction {
 
             _ => {
                 self.check_admin(pkey).map_or_else(|e| e, |_| 0);
-                zkwasm_rust_sdk::dbg!("admin tick to go \n");
+                zkwasm_rust_sdk::dbg!("to run tick\n");
                 STATE.0.borrow_mut().queue.tick();
                 0
             }
@@ -713,12 +712,6 @@ impl State {
     pub fn rand_seed() -> u64 {
         0
     }
-
-    pub fn autotick() -> bool {
-        false
-    }
-
-    pub fn settle(&mut self, rand: u64) {}
 
     pub fn hash_event_contains(event: Event) -> bool {
         let state = STATE.0.borrow();

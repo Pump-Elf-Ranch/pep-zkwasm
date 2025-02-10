@@ -40,6 +40,8 @@ spec:
               value: {{SETTLER_PRIVATE_ACCOUNT}}
             - name: RPC_PROVIDER
               value: {{RPC_URL}}
+            - name: REMOTE
+              value: 'true'
           image: >-
             registry.ap-northeast-1.aliyuncs.com/omni-new/per-zkwasm-server:{{IMAGE_VERSION}}
           imagePullPolicy: IfNotPresent
@@ -69,6 +71,8 @@ spec:
             - name: MERKLE_SERVER
               value: 'http://zkdb:3030'
             - name: DEPLOY
+              value: 'true'
+            - name: REMOTE
               value: 'true'
 
           image: >-

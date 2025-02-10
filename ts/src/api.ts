@@ -51,7 +51,7 @@ export class Player {
   }
 
   async getConfig(): Promise<any> {
-    let config = await rpc.query_config();
+    let config = await rpc.queryConfig();
     return config;
   }
 
