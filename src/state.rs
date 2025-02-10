@@ -567,7 +567,7 @@ impl Transaction {
                 let withdrawinfo =
                     WithdrawInfo::new(&[self.data[0], self.data[1], self.data[2]], 0);
                 SettlementInfo::append_settlement(withdrawinfo);
-                zkwasm_rust_sdk::dbg!("withdraw amount {:?}\n", amount);
+                zkwasm_rust_sdk::dbg!("withdraw amount is {:?}\n", amount);
                 player.data.gold_balance -= amount;
                 player.store();
                 Ok(())
