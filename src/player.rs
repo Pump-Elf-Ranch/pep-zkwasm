@@ -78,7 +78,7 @@ impl PlayerData {
         if let Some(elf) = self.get_elf_mut(ranch_id, elf_id) {
             let can_add_satiety = Elf::compute_need_add_satiety(prop_type, elf.clone());
             elf.satiety += can_add_satiety;
-            zkwasm_rust_sdk::dbg!("feed elf! \n");
+            zkwasm_rust_sdk::dbg!("feed elf! add {:} \n",can_add_satiety);
         }
     }
 

@@ -396,6 +396,7 @@ impl Elf {
 
     // 计算需要增加的饱食度
     pub fn compute_need_add_satiety(prop_type: u64, elf: Elf) -> u64 {
+        zkwasm_rust_sdk::dbg!("prop_type is {:?}\n", prop_type);
         let carrot = Carrot.0;
         let cabbage = Cabbage.0;
         let mut base_satiety: u64 = 0;
@@ -406,14 +407,18 @@ impl Elf {
         } else if prop_type == cabbage {
             base_satiety = 30;
         }
-
+        zkwasm_rust_sdk::dbg!("base_satiety is {:?}\n", base_satiety);
         if base_satiety == 0 {
             return 0;
         }
 
+        zkwasm_rust_sdk::dbg!("base_satiety1 is {:?}\n", base_satiety);
+
         // 剩余饱食度
         let can_add_satiety = 10000 - elf.satiety;
-        let prop_add_satiety = (base_satiety / 100) * 10000;
+        zkwasm_rust_sdk::dbg!("can_add_satiety is {:?}\n", can_add_satiety);
+        let prop_add_satiety = (base_satiety * 10000) / 100;
+        zkwasm_rust_sdk::dbg!("prop_add_satiety is {:?}\n", prop_add_satiety);
         if prop_add_satiety > can_add_satiety {
             return can_add_satiety;
         }
@@ -436,7 +441,7 @@ impl Elf {
 
         // 剩余健康度
         let can_add_health = 10000 - elf.health;
-        let prop_add_health = (base_health / 100) * 10000;
+        let prop_add_health = (base_health *10000) /100 ;
         if prop_add_health > can_add_health {
             return can_add_health;
         }
