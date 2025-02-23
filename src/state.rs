@@ -163,8 +163,9 @@ impl Transaction {
                     // 减少用户的金额
                     player.data.gold_balance -= buy_price;
                     // 获取当前牧场的宠物数量
+                    let max_id = player.data.get_elf_last_id(ranch_id).unwrap();
                     // 保存新宠物到牧场
-                    let new_elf = Elf::get_elf(rand, elf_type, elfs_count);
+                    let new_elf = Elf::get_elf(rand, elf_type, max_id);
                     let elf_event = new_elf.clone();
                     player.data.set_elf_by_ranch(ranch_id, new_elf);
                     player.store();

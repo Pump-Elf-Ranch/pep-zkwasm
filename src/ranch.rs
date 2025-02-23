@@ -120,15 +120,15 @@ impl RanchSlot {
 lazy_static::lazy_static! {
     pub static ref RANCH_SLOT_LIST: Vec<RanchSlot> = {
         vec![
-            RanchSlot::new(2,1000),
-            RanchSlot::new(3,1500),
-            RanchSlot::new(4,2000),
-            RanchSlot::new(5,3000),
-            RanchSlot::new(6,5000),
-            RanchSlot::new(7,7000),
-            RanchSlot::new(8,10000),
-            RanchSlot::new(9,15000),
-            RanchSlot::new(10,21000),
+            RanchSlot::new(2,500),
+            RanchSlot::new(3,1000),
+            RanchSlot::new(4,1500),
+            RanchSlot::new(5,2000),
+            RanchSlot::new(6,3000),
+            RanchSlot::new(7,4000),
+            RanchSlot::new(8,7000),
+            RanchSlot::new(9,10000),
+            RanchSlot::new(10,15000),
         ]
     };
 }

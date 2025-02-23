@@ -25,7 +25,7 @@ impl Default for PlayerData {
             clean_count: 0,
             feed_count: 0,
             health_count: 0,
-            gold_balance: 120, // 新用户默认给120个金币
+            gold_balance: 10000, // 新用户默认给120个金币
             ranchs: vec![],
         }
     }
@@ -71,6 +71,17 @@ impl PlayerData {
             return Some(len);
         }
         None
+    }
+
+    // 获取指定牧场id的精灵最大的id
+    pub fn get_elf_last_id(&mut self, ranch_id: u64) -> Option<u64> {
+        if let Some(ranch) = self.ranchs.iter_mut().find(|r| r.id == ranch_id) {
+            // 在该牧场的精灵列表中查找指定的精灵并返回可变引用
+            if let Some(max_id) =  ranch.elfs.iter().map(|e| e.id).max(){
+                return Some(max_id);
+            }
+        }
+        Some(0)
     }
 
     // 喂养宠物
