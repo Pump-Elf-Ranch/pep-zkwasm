@@ -26,7 +26,7 @@ run:
 	node ./ts/src/service.js
 
 publish:
-	node ./ts/node_modules/zkwasm-service-cli/dist/index.js addimage -n pump-elf -r "https://rpc.zkwasmhub.com:8090" -p "./pkg/application_bg.wasm" -u "0xd8f157Cc95Bc40B4F0B58eb48046FebedbF26Bde" --auto_submit_network_ids 11155111 -x "2763537251e2f27dc6a30179e7bf1747239180f45b92db059456b7da8194995a" -d "Multi User App" -c 22  > publish.log
+	node ./ts/node_modules/zkwasm-service-cli/dist/index.js addimage -n pump-elf -r "https://rpc.zkwasmhub.com:8090" -p "./pkg/application_bg.wasm" -u "0xd8f157Cc95Bc40B4F0B58eb48046FebedbF26Bde" --auto_submit_network_ids 10143 -x "2763537251e2f27dc6a30179e7bf1747239180f45b92db059456b7da8194995a" -d "Multi User App" -c 22  > publish.log
 
 
 deploy:
