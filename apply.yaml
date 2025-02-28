@@ -35,7 +35,7 @@ spec:
             - name: DEPLOY
               value: 'true'
             - name: SETTLEMENT_CONTRACT_ADDRESS
-              value: '0x85d56DA855E85154c23eBC3D9E6FcD7dB348019C'
+              value: '0x665d99af6d92120c0eea8170dffb3ceca0feafc0'
             - name: SETTLER_PRIVATE_ACCOUNT
               value: {{SETTLER_PRIVATE_ACCOUNT}}
             - name: RPC_PROVIDER
@@ -59,7 +59,7 @@ spec:
             - node
           env:
             - name: SETTLEMENT_CONTRACT_ADDRESS
-              value: '0x85d56DA855E85154c23eBC3D9E6FcD7dB348019C'
+              value: '0x665d99af6d92120c0eea8170dffb3ceca0feafc0'
             - name: SETTLER_PRIVATE_ACCOUNT
               value: {{SETTLER_PRIVATE_ACCOUNT}}
             - name: RPC_PROVIDER
